@@ -1,0 +1,31 @@
+const CategoryModel = require('../modules/CategoryModel');
+const slugify = require('slugify');
+const asyncHandler = require('express-async-handler');
+
+exports.getCategories=(req,res)=>{
+        //const name=req.body.name;
+        //console.log(req.body);
+        res.send();
+        
+        };
+
+
+//ADMIN ADD NEW Categorey******
+//async handelar to throw error to express to handel it without using try and catch
+  exports.createCategory=asyncHandler(async(req,res)=>{
+    const name=req.body.name;
+
+const category= await CategoryModel.create({name,slug:slugify(name)})
+res.status(201).json({data:category});
+
+
+
+
+
+
+
+
+   
+
+
+  });

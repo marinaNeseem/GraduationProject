@@ -1,0 +1,23 @@
+const mongoose = require('mongoose');
+
+const favoriteItemSchema = new mongoose.Schema({
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User', // Reference to the User model
+    required: true,
+  },
+  item: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Item', // Reference to the Item model
+    required: true,
+  },
+  // You can add more fields as needed for your favorite item
+  // For example, you might want to store additional information like the date it was favorited
+}, {
+  timestamps: true,
+});
+
+const FavoriteItem = mongoose.model('FavoriteItem', favoriteItemSchema);
+
+module.exports = FavoriteItem;
+

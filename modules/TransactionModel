@@ -1,0 +1,35 @@
+const mongoose = require('mongoose');
+
+const transactionSchema = new mongoose.Schema({
+  initiator: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+  receiver: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+  exchangedItems: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Item',
+    required: true,
+  }],
+  status: {
+    type: String,
+    enum: ['pending', 'completed', 'cancelled'], // Add more statuses as needed
+    default: 'pending',
+  },
+  initiatedAt: {
+    type: Date,
+    default: Date.now,
+  },
+  completedAt: {
+    type: Date,
+  },
+});
+
+const Transaction = mongoose.model('Transaction', transactionSchema);
+
+module.exports = Transaction;

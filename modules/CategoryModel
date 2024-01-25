@@ -1,0 +1,27 @@
+const mongoose=require('mongoose');
+
+//1-Create schema
+const CategorySchema = new mongoose.Schema({
+    Id:{
+        type: Number,
+    },
+name:{
+    type: String,
+    required:[true,'Category Required'],
+    unique:true,
+    minlength:[3,'too short Category '],
+    maxlength:[20,'Too long Category Required'],
+},
+//A and b =>a-and-bs
+slug:{
+    type:String,
+    lowercase: true,
+},
+image : String,
+},
+{//to bring newset proudacts from db
+    timestamps:true
+});
+//2-create model
+ const Category = mongoose.model('Category',CategorySchema);
+  module.exports = Category;

@@ -1,0 +1,44 @@
+const mongoose=require('mongoose');
+
+//1-Create schema
+const ItemSchema = new mongoose.Schema({
+   
+Descreption:{
+    type: String,
+    minlength:[3,'too short Descreption '],
+    maxlength:[200,'Too long Descreption'],
+},
+title:{
+    type: String,
+    required:[true,'title Required'],
+    minlength:[3,'too short title name '],
+    maxlength:[15,'Too long titlename'],
+},
+price: {
+    type: Number,
+    required: true,
+    min: [0, 'Price cannot be negative'],
+},
+category: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Category', // Reference to the Category model
+    required: true,
+},
+user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User', // reference to the  User model
+    required: true,
+},
+//A and b =>a-and-bs
+slug:{
+    type:String,
+    lowercase: true,
+},
+image : String,
+},
+{//to bring newset proudacts from db
+    timestamps:true
+});
+//2-create model
+ const ItemModel = mongoose.model('Item',ItemSchema);
+  module.exports = ItemModel;

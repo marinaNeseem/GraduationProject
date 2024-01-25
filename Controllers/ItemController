@@ -1,0 +1,32 @@
+const itemModel = require('../modules/ItemModel');
+const slugify = require('slugify');
+const asyncHandler = require('express-async-handler');
+
+
+
+exports.createItem=asyncHandler(async(req,res)=>{
+    const title=req.body.title;
+    const Descreption=req.body.Descreption;
+    const price =req.body.price;
+    const email=req.body.email;
+    const category=req.body.category;
+    const phone=req.body.phone;
+    const user=req.body.user;
+    
+    
+
+
+const Item= await itemModel.create({title,slug:slugify(title),Descreption,user,category,price,email,phone})
+res.status(201).json({data:Item});
+
+
+
+
+
+
+
+
+   
+
+
+  });
