@@ -1,32 +1,286 @@
+
 const itemModel = require('../modules/ItemModel');
+const UserModel = require('../modules/UserModel');
 const slugify = require('slugify');
 const asyncHandler = require('express-async-handler');
+const multer = require('multer');
+const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 
 
+//Create item
 
-exports.createItem=asyncHandler(async(req,res)=>{
-    const title=req.body.title;
-    const Descreption=req.body.Descreption;
-    const price =req.body.price;
-    const email=req.body.email;
-    const category=req.body.category;
-    const phone=req.body.phone;
-    const user=req.body.user;
-    
-    
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+      cb(null, 'uploads/'); // Save the uploaded files to the 'uploads' directory
+  },
+  filename: function (req, file, cb) {
+      cb(null, file.fieldname + '-' + Date.now() + '.' + file.originalname.split('.').pop());
+  }
+});
 
+const upload = multer({ storage: storage });
 
-const Item= await itemModel.create({title,slug:slugify(title),Descreption,user,category,price,email,phone})
-res.status(201).json({data:Item});
+exports.createItem = asyncHandler(async (req, res) => {
+  upload.single('image')(req, res, async (err) => {
+      if (err) {
+          console.log(err);
+          return res.status(400).json({ success: false, message: "Error uploading image" });
+      }
 
+      // Extract token from request headers
+      const token = req.headers.authorization;
 
+      // Check if token exists
+      if (!token) {
+          return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
+      }
 
+      // Verify token
+      const decoded = jwt.verify(token, 'your_secret_key');
+      const userId = decoded.userId;
 
+      const { title, description, price, category, phone,condition } = req.body;
 
+      // Create new item associated with the user identified by the token
+      const item = await itemModel.create({
+          title,
+          slug: slugify(title),
+          description,
+          user: userId, // Associate the item with the user identified by the token
+          category,
+          price,
+          phone,
+          condition,
+          image: req.file ? req.file.path : null // Save the path of the uploaded image
+      });
 
-
-
-   
-
-
+      res.status(201).json({ success: true, data: item });
   });
+});
+
+
+  //Get all items
+  exports.getItems =asyncHandler(async(req,res)=>{
+    //req from user as prams (pages,limit)
+const page =req.query.page*1 || 1;// to convert string to number(query returen string)
+const limit =req.query.limit*1||5;
+const skip =(page-1)*limit;
+const items = await itemModel.find({}).skip(skip).limit(limit);
+res.status(200).json({TotalItems : items.length , page, data: items});  
+  });
+
+  //get spisific item by id
+
+exports.getItem = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ msg: 'Invalid ID format' });
+    }
+
+    const item = await itemModel.findById(id);
+    if (!item) {
+        return res.status(404).json({ msg: `No item found for this id ${id}` });
+    }
+    res.status(200).json({ data: item });
+});
+
+//to get specific item by name
+exports.getItemByName = asyncHandler(async (req, res) => {
+  const { title } = req.params;
+  
+  const item = await itemModel.findOne({ title });
+  if (!item) {
+      return res.status(404).json({ msg: `No item found with name '${title}'` });
+  }
+  res.status(200).json({ data: item });
+});
+
+//to update specific item
+
+exports.updateitem = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { token } = req.headers;
+  const { title, price, Descreption, category, condition } = req.body;
+
+  // Check if token exists
+  if (!token) {
+      return res.status(401).json({ msg: 'Unauthorized: No token provided' });
+  }
+
+  try {
+      // Verify token
+      const decoded = jwt.verify(token, 'your_secret_key');
+      const userId = decoded.userId;
+
+      // Retrieve the item from the database
+      const itemToUpdate = await itemModel.findById(id);
+
+      // Check if the item exists
+      if (!itemToUpdate) {
+          return res.status(404).json({ msg: `No item found for this id: ${id}` });
+      }
+
+      // Check if the user is authorized to update the item
+      if (itemToUpdate.user.toString() !== userId) {
+          return res.status(403).json({ msg: 'You are not authorized to update this item' });
+      }
+
+      // Generate slug from title
+      const slug = slugify(title);
+
+      // Update the item
+      const updatedItem = await itemModel.findByIdAndUpdate(
+          id,
+          { title, slug, price, Descreption, category, condition },
+          { new: true }
+      );
+
+      // Check if the item was successfully updated
+      if (!updatedItem) {
+          return res.status(500).json({ msg: 'Failed to update item' });
+      }
+
+      res.status(200).json({ data: updatedItem });
+  } catch (error) {
+      console.error(error); // Log the error for debugging
+      return res.status(401).json({ msg: 'Unauthorized: Invalid token' });
+  }
+});
+// delete spicific item
+exports.deleteitem = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { token } = req.headers;
+
+  // Check if token exists
+  if (!token) {
+      return res.status(401).json({ msg: 'Unauthorized: No token provided' });
+  }
+
+  try {
+      // Verify token
+      const decoded = jwt.verify(token, 'your_secret_key');
+      const userId = decoded.userId;
+
+      // Retrieve the item from the database
+      const itemToDelete = await itemModel.findById(id);
+
+      // Check if the item exists
+      if (!itemToDelete) {
+          return res.status(404).json({ msg: `No item found for this id: ${id}` });
+      }
+
+      // Check if the user is authorized to delete the item
+      if (itemToDelete.user.toString() !== userId) {
+          return res.status(403).json({ msg: 'You are not authorized to delete this item' });
+      }
+
+      // Delete the item
+      await itemModel.findByIdAndDelete(id);
+
+      res.status(200).json({ msg: `The item with ID ${id} was successfully deleted` });
+  } catch (error) {
+      console.error('Error deleting item:', error);
+      return res.status(500).json({ msg: 'Internal server error' });
+  }
+});
+
+
+
+  
+
+//add item to saved items
+exports.addToSavedItems = asyncHandler(async (req, res) => {
+  try {
+    const { itemId, userId } = req.body;
+
+    // Check if both item ID and user ID are provided
+    if (!itemId || !userId) {
+      return res.status(400).json({ error: 'Item ID and User ID are required' });
+    }
+
+    // Check if the item exists
+    const item = await itemModel.findById(itemId);
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    // Check if the user exists
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Ensure the favorites array is initialized
+    if (!user.favorites) {
+      user.favorites = [];
+    }
+
+    // Check if the item is already in user's favorites
+    if (user.favorites.includes(itemId)) {
+      return res.status(400).json({ error: 'Item already in favorites' });
+    }
+
+    // Add the item to user's favorites
+    user.favorites.push(itemId);
+    await user.save();
+
+    res.status(200).json({ message: 'Item added to favorites successfully' });
+  } catch (error) {
+    console.error('Error adding item to favorites:', error);
+    res.status(500).json({ error: 'Failed to add item to favorites' });
+  }
+});
+
+
+// LSIT SAVED ITEMS OF SPECIFIC USER
+
+// Endpoint to retrieve user's favorite items
+/*exports.listSavedItems=asyncHandler(async (req, res) => {
+  try {
+      const {Id} = req.params;
+
+      // Check if the user exists
+      const user = await UserModel.findById(Id).populate('favorites');
+      if (!user) {
+          return res.status(404).json({ error: 'User not found' });
+      }else{
+
+      // Extract favorite items from the populated favorites array
+      const favoriteItems = user.favorites;
+
+      res.status(200).json(favoriteItems);}
+  } catch (error) {
+      console.error('Error retrieving user\'s Saved items:', error);
+      res.status(500).json({ error: 'Failed to retrieve user\'s saved items' });
+  }
+});*/
+// 
+exports.listSavedItems = asyncHandler(async (req, res) => {
+  try {
+    const { Id } = req.params; // Corrected parameter name
+    console.log('User ID received:', Id); // Log the received user ID
+
+    // Check if the user exists
+    const user = await UserModel.findById(Id).populate('favorites');
+    console.log('User found:', user); // Log the user document
+    if (!user) {
+      console.log('User not found');
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check if user has any favorites
+    if (!user.favorites) {
+      console.log('User has no saved items');
+      return res.status(200).json({ message: 'User has no saved items' });
+    }
+
+    // Extract favorite items from the populated favorites array
+    const favoriteItems = user.favorites;
+
+    res.status(200).json(favoriteItems);
+  } catch (error) {
+    console.error('Error retrieving user\'s Saved items:', error);
+    res.status(500).json({ error: 'Failed to retrieve user\'s saved items' });
+  }
+});

@@ -6,7 +6,8 @@ dotenv.config({path:'config.env'});
 const dbConnection =require('./config/database');
 const categoryRoute=require('./Routes/categoreyRouts');
 const itemRoute= require('./Routes/itemRoute');
-
+const UserRoute= require('./Routes/userRouts');
+const PersonRoute =require('./Routes/PersonRouts');
 
 //creating models in mongo db befor al routes 
 const Cart = require('./modules/CartModel');
@@ -51,6 +52,8 @@ if(process.env.Node_ENV=='development'){
 
 app.use('/categories',categoryRoute);
 app.use('/item',itemRoute);
+app.use('/User',UserRoute);
+app.use('/person',PersonRoute);
 
 
 const PORT=process.env.PORT||8000;//hy4of al port fe al env file ml2ho4 hya5od al odam al OR

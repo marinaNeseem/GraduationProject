@@ -32,6 +32,26 @@ const userSchema = new mongoose.Schema({
         type: Number,
         trim: true,
     },
+    location: {
+        governorate: {
+            type: String,
+            required: true,
+        },
+        city: {
+            type: String,
+            required: true,
+        }
+    },
+    favorites: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Item',
+    }],
+
+    token: {
+        type: String
+    }
+,
+
     // Add more fields as needed for your user model
     // ...
 }, {

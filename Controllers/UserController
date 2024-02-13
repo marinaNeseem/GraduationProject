@@ -1,0 +1,63 @@
+const UserModel = require('../modules/UserModel');
+//const slugify = require('slugify');
+//const asyncHandler = require('express-async-handler');
+const jwt = require('jsonwebtoken');
+
+const bcrypt = require('bcrypt');
+const User = require('../modules/UserModel');
+exports.registerUser = async (req, res) => {
+    try {
+        const { username, email, password, phone, governorate, city } = req.body;
+        const existingUser = await User.findOne({ email });
+
+        if (existingUser) {
+            return res.status(400).json({ message: 'Email already registered!' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const newUser = new User({
+            username,
+            email,
+            password: hashedPassword,
+            phone,
+            location: {
+                governorate,
+                city
+            }
+        });
+
+        // Generate token
+        const token = jwt.sign({ userId: newUser._id }, 'your_secret_key'); // Replace 'your_secret_key' with your actual secret key
+
+        // Save token to user document
+        newUser.token = token;
+        await newUser.save();
+
+        res.status(201).json({ message: 'Registered successfully!', token });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+exports.loginUser = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        const user = await User.findOne({ email });
+
+        if (!user) {
+            return res.status(400).json({ message: 'Email not found!' });
+        }
+
+        const passwordMatch = await bcrypt.compare(password, user.password);
+
+        if (passwordMatch) {
+            // You may generate a JWT token here for authentication
+            res.status(200).json({ message: 'Logged in successfully!' });
+        } else {
+            res.status(400).json({ message: 'Incorrect password!' });
+        }
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+

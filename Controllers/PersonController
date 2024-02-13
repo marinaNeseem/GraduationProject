@@ -1,0 +1,121 @@
+const PersonModel =require('../modules/PersonModel');
+const asyncHandler = require('express-async-handler');
+
+
+//add person
+exports.createPerson=asyncHandler(async(req,res)=>{
+    const name=req.body.name;
+    const  phone=req.body.phone;
+    const address =req.body.address;
+    const notesAboutPerson=req.body.notesAboutPerson;
+    const attendance=req.body.attendance;
+    const date=req.body.date;
+   
+const Item= await PersonModel.create({name,
+  phone,
+  address,
+  notesAboutPerson,
+  attendance,
+  date,
+  phone,
+  attendanceHistory: []})
+res.status(201).json({data:Item});
+  });
+
+  //add attendance to a person
+  exports.addAttendance = asyncHandler(async(req, res) => {
+    const { id } = req.params;
+    const { attendance, date } = req.body;
+    try {
+        const person = await PersonModel.findById(id);
+        if (!person) {
+            return res.status(404).json({ msg: `No person found for ID: ${id}` });
+        }
+        // Push the new attendance record to the attendance history array
+        person.attendanceHistory.push({ attendance, date });
+        await person.save();
+        res.status(200).json({ msg: 'Attendance added successfully', data: person });
+    } catch (error) {
+        console.error('Error adding attendance:', error);
+        res.status(500).json({ msg: 'Internal server error' });
+    }
+});
+
+
+
+//get user info
+exports.getPersonByName = asyncHandler(async (req, res) => {
+  const { name } = req.params;
+  
+  const person= await PersonModel.findOne({ name });
+  if (!person) {
+      return res.status(404).json({ msg: `No item found with name '${name}'` });
+  }
+  res.status(200).json({ data: person });
+});
+
+
+
+exports.updateperson = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const {
+      address,
+      notesAboutPerson,
+      attendance,
+      date,
+      phone,
+  } = req.body;
+
+  // Retrieve the person from the database
+  const personToUpdate = await PersonModel.findById(id);
+
+  // Check if the person exists
+  if (!personToUpdate) {
+      return res.status(404).json({ msg: `No person found for this id: ${id}` });
+  }else{
+
+  try {
+      // Update the person's information
+      personToUpdate.address = address;
+      personToUpdate.notesAboutPerson = notesAboutPerson;
+      personToUpdate.phone = phone;
+
+      // Check if there's an existing attendance record for the provided date
+      const existingAttendanceRecord = personToUpdate.attendanceHistory.find(record => record.date === date);
+
+      if (existingAttendanceRecord) {
+          // If an attendance record already exists for the date, update its attendance value
+          existingAttendanceRecord.attendance = attendance;
+      } else {
+          // If no attendance record exists for the date, add a new attendance record
+          personToUpdate.attendanceHistory.push({ attendance, date });
+      }
+
+      // Save the updated person
+      const updatedPerson = await personToUpdate.save();
+
+      // Return the updated person
+      res.status(200).json({ data: updatedPerson });
+  } catch (error) {
+      console.error('Error updating person:', error);
+      res.status(500).json({ msg: 'Internal server error' });
+  }}
+});
+
+
+
+
+//delete person
+exports.deletePerson= asyncHandler(async(req,res) => {
+  const { id } = req.params;
+  let person =await PersonModel.findById(id);
+      if (!person) {
+          return res.status(404).json({ msg: `No item found for this ID: ${id}` });
+      }
+     
+       else {
+       const persontodelete =await PersonModel.findByIdAndDelete(id);
+          res.status(200).json({ msg: `The item with ID ${id} was successfully deleted` });
+      }
+  
+});

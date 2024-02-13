@@ -1,0 +1,42 @@
+const mongoose = require('mongoose');
+
+// Define sub-schema for attendance history record
+const AttendanceRecordSchema = new mongoose.Schema({
+    attendance: {
+        type: Boolean,
+        required: true,
+    },
+    date: {
+        type: String,
+        required: true,
+    }
+});
+
+// Define main schema for Person
+const personSchema = new mongoose.Schema({
+    name: {
+        type: String,
+        required: true,
+        trim: true,
+    },
+    phone: {
+        type: String,
+        required: true,
+        trim: true,
+    },
+    address: {
+        type: String,
+        required: true,
+        trim: true,
+    },
+    notesAboutPerson: {
+        type: String,
+        trim: true,
+    },
+    attendanceHistory: [AttendanceRecordSchema], // Embed the sub-schema as an array
+
+});
+
+const PersonModel = mongoose.model('Person', personSchema);
+
+module.exports = PersonModel;
