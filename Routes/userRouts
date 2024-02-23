@@ -1,9 +1,10 @@
 const express = require('express');
-const {registerUser ,loginUser} = require('../Controllers/UserController');
+const {registerUser ,loginUser,UploadUserPhoto,updateUserInfo,UpdateUserPhoto} = require('../Controllers/UserController');
 const router=express.Router();
-router.route('/').get(loginUser).post(registerUser); 
-
-
+router.route('/').get(loginUser).post(registerUser);
+router.route('/UploadUserPhoto').post(UploadUserPhoto);
+router.route('/updateUserInfo').put(updateUserInfo);
+router.route('/UpdateUserPhoto').put(UpdateUserPhoto);
 //router.post('/signup', registerUser);
 //router.post('/login', loginUser);
 module.exports = router;

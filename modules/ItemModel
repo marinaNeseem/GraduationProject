@@ -5,8 +5,8 @@ const ItemSchema = new mongoose.Schema({
     title:{
         type: String,
         required:[true,'title Required'],
-        minlength:[3,'too short title name '],
-        maxlength:[15,'Too long titlename'],
+        minlength:[3,'too short title name at least 3 charachter '],
+        maxlength:[20,'Too long titlename'],
     },
 Descreption:{
     type: String,
@@ -22,7 +22,10 @@ price: {
 category: {
     type: String,
     required: true,
-    enum: ['electronics', 'phones', 'clothes', 'cars']
+    enum: {
+        values: ['electronics', 'phones', 'clothes', 'cars'],
+        message: 'Invalid category. Category must be one of: electronics, phones, clothes, cars',
+    }
 },
 user: {
     type: mongoose.Schema.Types.ObjectId,

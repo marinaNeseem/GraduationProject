@@ -35,7 +35,7 @@ exports.createItem = asyncHandler(async (req, res) => {
       if (!token) {
           return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
       }
-
+      try{
       // Verify token
       const decoded = jwt.verify(token, 'your_secret_key');
       const userId = decoded.userId;
@@ -56,6 +56,18 @@ exports.createItem = asyncHandler(async (req, res) => {
       });
 
       res.status(201).json({ success: true, data: item });
+
+     } catch (error) {
+
+          // Handle Mongoose validation errors
+          if (error instanceof mongoose.Error.ValidationError) {
+            const errors = Object.values(error.errors).map((val) => val.message);
+            return res.status(400).json({ success: false, message: errors });
+          }
+  
+        console.log(error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+      }
   });
 });
 
@@ -105,7 +117,7 @@ exports.updateitem = asyncHandler(async (req, res) => {
 
   // Check if token exists
   if (!token) {
-      return res.status(401).json({ msg: 'Unauthorized: No token provided' });
+      return res.status(401).json({success: false, msg: 'Unauthorized: No token provided' });
   }
 
   try {
@@ -118,12 +130,12 @@ exports.updateitem = asyncHandler(async (req, res) => {
 
       // Check if the item exists
       if (!itemToUpdate) {
-          return res.status(404).json({ msg: `No item found for this id: ${id}` });
+          return res.status(404).json({success: false, msg: `No item found for this id: ${id}` });
       }
 
       // Check if the user is authorized to update the item
       if (itemToUpdate.user.toString() !== userId) {
-          return res.status(403).json({ msg: 'You are not authorized to update this item' });
+          return res.status(403).json({success: false, msg: 'You are not authorized to update this item' });
       }
 
       // Generate slug from title
@@ -138,13 +150,13 @@ exports.updateitem = asyncHandler(async (req, res) => {
 
       // Check if the item was successfully updated
       if (!updatedItem) {
-          return res.status(500).json({ msg: 'Failed to update item' });
+          return res.status(500).json({success: false, msg: 'Failed to update item' });
       }
 
-      res.status(200).json({ data: updatedItem });
+      res.status(200).json({ success:true ,data: updatedItem });
   } catch (error) {
       console.error(error); // Log the error for debugging
-      return res.status(401).json({ msg: 'Unauthorized: Invalid token' });
+      return res.status(401).json({ success: false,msg: 'Unauthorized: Invalid token' });
   }
 });
 // delete spicific item
@@ -154,7 +166,7 @@ exports.deleteitem = asyncHandler(async (req, res) => {
 
   // Check if token exists
   if (!token) {
-      return res.status(401).json({ msg: 'Unauthorized: No token provided' });
+      return res.status(401).json({ success: false,msg: 'Unauthorized: No token provided' });
   }
 
   try {
@@ -167,37 +179,41 @@ exports.deleteitem = asyncHandler(async (req, res) => {
 
       // Check if the item exists
       if (!itemToDelete) {
-          return res.status(404).json({ msg: `No item found for this id: ${id}` });
+          return res.status(404).json({success: false, msg: `No item found for this id: ${id}` });
       }
 
       // Check if the user is authorized to delete the item
       if (itemToDelete.user.toString() !== userId) {
-          return res.status(403).json({ msg: 'You are not authorized to delete this item' });
+          return res.status(403).json({ success: false , msg: 'You are not authorized to delete this item' });
       }
 
       // Delete the item
       await itemModel.findByIdAndDelete(id);
 
-      res.status(200).json({ msg: `The item with ID ${id} was successfully deleted` });
+      res.status(200).json({success: true , msg: `The item with ID ${id} was successfully deleted` });
   } catch (error) {
       console.error('Error deleting item:', error);
-      return res.status(500).json({ msg: 'Internal server error' });
+      return res.status(500).json({success: false , msg: 'Internal server error' });
   }
 });
 
 
 
-  
+//ADD ITEM TO SAVED ITEMS
 
-//add item to saved items
 exports.addToSavedItems = asyncHandler(async (req, res) => {
   try {
-    const { itemId, userId } = req.body;
+    const itemId = req.params.itemId; // Extract itemId from request parameters
+    const token = req.headers.token; // Extract token from request headers
 
-    // Check if both item ID and user ID are provided
-    if (!itemId || !userId) {
-      return res.status(400).json({ error: 'Item ID and User ID are required' });
+    // Check if both item ID and token are provided
+    if (!itemId || !token) {
+      return res.status(400).json({ error: 'Item ID and token are required' });
     }
+
+    // Verify token
+    const decoded = jwt.verify(token, 'your_secret_key');
+    const userId = decoded.userId;
 
     // Check if the item exists
     const item = await itemModel.findById(itemId);
@@ -232,55 +248,42 @@ exports.addToSavedItems = asyncHandler(async (req, res) => {
   }
 });
 
+  
 
-// LSIT SAVED ITEMS OF SPECIFIC USER
 
-// Endpoint to retrieve user's favorite items
-/*exports.listSavedItems=asyncHandler(async (req, res) => {
-  try {
-      const {Id} = req.params;
 
-      // Check if the user exists
-      const user = await UserModel.findById(Id).populate('favorites');
-      if (!user) {
-          return res.status(404).json({ error: 'User not found' });
-      }else{
-
-      // Extract favorite items from the populated favorites array
-      const favoriteItems = user.favorites;
-
-      res.status(200).json(favoriteItems);}
-  } catch (error) {
-      console.error('Error retrieving user\'s Saved items:', error);
-      res.status(500).json({ error: 'Failed to retrieve user\'s saved items' });
-  }
-});*/
-// 
+// List all saved items of a user
+// LIST SAVED ITEMS
 exports.listSavedItems = asyncHandler(async (req, res) => {
   try {
-    const { Id } = req.params; // Corrected parameter name
-    console.log('User ID received:', Id); // Log the received user ID
+    const token = req.headers.token; // Extract token from request headers
+
+    // Check if token is provided
+    if (!token) {
+      return res.status(400).json({ error: 'Token is required' });
+    }
+
+    // Verify token
+    const decoded = jwt.verify(token, 'your_secret_key');
+    const userId = decoded.userId;
+
+    // Find user by ID
+    const user = await UserModel.findById(userId).populate('favorites');
 
     // Check if the user exists
-    const user = await UserModel.findById(Id).populate('favorites');
-    console.log('User found:', user); // Log the user document
     if (!user) {
-      console.log('User not found');
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Check if user has any favorites
-    if (!user.favorites) {
-      console.log('User has no saved items');
-      return res.status(200).json({ message: 'User has no saved items' });
+    // Check if favorites array is empty
+    if (!user.favorites || user.favorites.length === 0) {
+      return res.status(200).json({ message: 'Saved items list is empty' });
     }
 
-    // Extract favorite items from the populated favorites array
-    const favoriteItems = user.favorites;
-
-    res.status(200).json(favoriteItems);
+    // Return the list of saved items
+    res.status(200).json({ data: user.favorites });
   } catch (error) {
-    console.error('Error retrieving user\'s Saved items:', error);
-    res.status(500).json({ error: 'Failed to retrieve user\'s saved items' });
+    console.error('Error listing saved items:', error);
+    res.status(500).json({ error: 'Failed to list saved items' });
   }
 });
