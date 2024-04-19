@@ -1,100 +1,36 @@
 const mongoose = require('mongoose');
 
 const chatMessageSchema = new mongoose.Schema({
-  participants: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-  }],
-  content: {
-    type: String,
-    required: true,
-  },
-  images: [{
-    type: String,
-  }],
-  documents: [{
-    type: String,
-  }],
-  audio: {
-    data: Buffer, // Store binary audio data
-    contentType: String, // Store content type (e.g., 'audio/mp3')
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-});
+  messages: [
+    {
+      text: {
+        type: String,
+        required: true
+      },
+      sender: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+      },
+      Date: {
+        type:Date,
+        default: Date.now,
+        required:true
+
+      },
+      time: String,
+    }
+  ],
+  users: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    }
+  ],
+ 
+}, { timestamps: true });
 
 const ChatMessage = mongoose.model('ChatMessage', chatMessageSchema);
 
 module.exports = ChatMessage;
-
-
-//alternative model
-
-
-
-
-/* chatModel.js
-const mongoose = require('mongoose');
-
-const messageSchema = new mongoose.Schema({
-  sender: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User', // Reference to the User model
-    required: true
-  },
-  messageType: {
-    type: String,
-    enum: ['text', 'voiceNote', 'image', 'document'],
-    required: true
-  },
-  content: {
-    type: String, // For text messages and voice notes
-    required: function () {
-      return ['text', 'voiceNote'].includes(this.messageType);
-    }
-  },
-  voiceNote: {
-    type: String, // For voice notes (store the file path or URL)
-    required: function () {
-      return this.messageType === 'voiceNote';
-    }
-  },
-  image: {
-    type: String, // For image messages (store the file path or URL)
-    required: function () {
-      return this.messageType === 'image';
-    }
-  },
-  document: {
-    type: String, // For document messages (store the file path or URL)
-    required: function () {
-      return this.messageType === 'document';
-    }
-  },
-  timestamp: {
-    type: Date,
-    default: Date.now
-  }
-});
-
-const chatSchema = new mongoose.Schema({
-  participants: [
-    {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User', // Reference to the User model
-      required: true
-    }
-  ],
-  messages: [messageSchema],
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
-});
-
-const Chat = mongoose.model('Chat', chatSchema);
-
-module.exports = Chat;*/

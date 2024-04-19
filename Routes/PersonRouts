@@ -1,9 +1,0 @@
-const express = require('express');
-const {createPerson,addAttendance,getPersonByName,updateperson,deletePerson} =require('../Controllers/PersonController');
-const router=express.Router();
-router.route('/').post(createPerson); 
-router.route('/:id').put(updateperson).post(addAttendance).delete(deletePerson); 
-router.route('/:name').get(getPersonByName); 
-//router.route("/id/:id").put(updateitem).get(getItem).delete(deleteitem);
-//router.route("/title/:title").get(getItemByName);
-module.exports=router;

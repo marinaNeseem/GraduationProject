@@ -1,0 +1,129 @@
+const express = require('express');
+const router = express.Router();
+const ExchangeRequestModel = require('../modules/RequestModel');
+const jwt = require('jsonwebtoken');
+const ItemModel = require('../modules/ItemModel');
+const asyncHandler = require('express-async-handler');
+const UserModel = require('../modules/UserModel');
+const mongoose = require('mongoose');
+
+// list all items of the user by their ID from the token
+exports.listOfferedItems = asyncHandler(async (req, res) => {
+    try {
+        const token = req.headers.token;
+        const decoded = jwt.verify(token, 'your_secret_key');
+        const userId = decoded.userId;
+
+        if (!token) {
+            return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
+        }
+
+        // Fetch items of the user by their ID
+        const itemsList = await ItemModel.find({ user: userId });
+
+        res.status(200).json(itemsList);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
+//wait for test with the front end
+
+
+//request exchange
+exports.createExchangeRequest1 = asyncHandler(async (req, res) => {
+    try {
+        
+        const token =req.headers.token;
+        const decoded = jwt.verify(token, 'your_secret_key');
+        const RequesterId= decoded.userId;
+        const Item_offered_id = req.body.Item_offered_id;          // Extract only the ID
+        const Item_requested_id = req.body.Item_requested_id; // Extract only the ID
+
+
+      // Check if Item_offered_id is provided and it's a valid ObjectId
+if (!mongoose.Types.ObjectId.isValid(Item_offered_id)) {
+    return res.status(400).json({ error: 'Invalid Item_offered_id' });
+
+
+}
+if (!Item_requested_id) {
+    
+    return res.status(400).json({ error: 'Requested item ID is required' });
+    
+}
+// Check if Item_requested_id is provided and it's a valid ObjectId
+if (!mongoose.Types.ObjectId.isValid(Item_requested_id)) {
+    return res.status(400).json({ error: 'Invalid Item_requested_id' });
+}
+        if (!token) {
+            return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
+        }
+
+       
+
+        // Retrieve the item using the item IDs
+        const item = await ItemModel.findById(Item_requested_id);
+        if (!item) {
+            return res.status(404).json({ error: 'Item not found' });
+        }
+
+        // Access the user associated with the item
+        const RequestedUserId = item.user;
+
+        // Create the exchange request
+        const exchangeRequest = new ExchangeRequestModel({
+            Item_requested_id: Item_requested_id,
+            requested_User_id: RequestedUserId,
+            requester_id: RequesterId,
+            Item_offered_id: Item_offered_id
+        });
+
+        const savedRequest = await exchangeRequest.save();
+        res.status(200).json(savedRequest);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
+
+/*
+
+// Function to retrieve all exchange requests
+async function getAllExchangeRequests(req, res) {
+    try {
+        const exchangeRequests = await ExchangeRequestModel.find();
+        res.json(exchangeRequests);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+}
+
+// Function to update the status of an exchange request
+async function updateExchangeRequestStatus(req, res) {
+    try {
+        const requestId = req.params.id;
+        const { newStatus } = req.body;
+        const updatedRequest = await ExchangeRequestModel.findByIdAndUpdate(requestId, { status: newStatus }, { new: true });
+        res.json(updatedRequest);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+}
+
+// Function to delete an exchange request
+async function deleteExchangeRequest(req, res) {
+    try {
+        const requestId = req.params.id;
+        await ExchangeRequestModel.findByIdAndDelete(requestId);
+        res.json({ message: 'Exchange request deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+}
+
+*/

@@ -42,7 +42,13 @@ slug:{
     type:String,
     lowercase: true,
 },
-image : String,
+  image: String,
+      
+
+status: { 
+    type: String,
+     enum: ['pending', 'accepted', 'rejected'],
+     default: 'pending' },
 },
 {//to bring newset proudacts from db
     timestamps:true

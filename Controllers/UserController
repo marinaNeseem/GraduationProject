@@ -7,6 +7,8 @@ const bcrypt = require('bcrypt');
 const User = require('../modules/UserModel');
 const mongoose = require('mongoose');
 
+//register
+
 
 exports.registerUser = async (req, res) => {
     try {
@@ -42,6 +44,7 @@ exports.registerUser = async (req, res) => {
     }
 };
 
+//Login
 exports.loginUser = async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -54,8 +57,7 @@ exports.loginUser = async (req, res) => {
         const passwordMatch = await bcrypt.compare(password, user.password);
 
         if (passwordMatch) {
-            // You may generate a JWT token here for authentication
-            res.status(200).json({ message: 'Logged in successfully!' });
+            res.status(200).json({ message: 'Logged in successfully!', token: user.token });
         } else {
             res.status(400).json({ message: 'Incorrect password!' });
         }
@@ -63,7 +65,6 @@ exports.loginUser = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
-
 
 //upload user photo after registration
 //Upload User Photo
@@ -120,14 +121,14 @@ const storagee = multer.diskStorage({
 
 
   //update user information ONLY
-
+// Update user information (excluding password)
 exports.updateUserInfo = asyncHandler(async (req, res) => {
     const token = req.headers.token;
-    const { username, email, password, phone, city, governorate } = req.body;
+    const { username, email, phone, city, governorate } = req.body;
 
     // Check if token exists
     if (!token) {
-        return res.status(401).json({success: false, msg: 'Unauthorized: No token provided' });
+        return res.status(401).json({ success: false, msg: 'Unauthorized: No token provided' });
     }
 
     try {
@@ -135,28 +136,66 @@ exports.updateUserInfo = asyncHandler(async (req, res) => {
         const decoded = jwt.verify(token, 'your_secret_key');
         const userId = decoded.userId;
 
+        // Update the user (excluding password)
+        const updatedUser = await UserModel.findByIdAndUpdate(
+            userId,
+            {
+                username,
+                email,
+                phone,
+                location: { governorate, city },
+            },
+            { new: true }
+        );
 
-            // Update the user
-            const updatedUser = await UserModel.findByIdAndUpdate(
-                userId,
-                {
-                    username,
-                    email,
-                    password,
-                    phone,
-                    location: { governorate, city },
-                    
-                },
-                { new: true }
-            );
+        if (!updatedUser) {
+            return res.status(500).json({ success: false, msg: 'Failed to update user' });
+        } else {
+            res.status(200).json({ success: true, data: updatedUser });
+        }
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ success: false, msg: 'Internal Server Error' });
+    }
+});
 
-            if (!updatedUser) {
-                return res.status(500).json({success: false, msg: 'Failed to update user' });
-            }
-            else {
-                res.status(200).json({ success: true, data: updatedUser });
-            }
-        
+
+// Change password
+exports.changePassword = asyncHandler(async (req, res) => {
+    const token = req.headers.token;
+    const { oldPassword, newPassword } = req.body;
+
+    // Check if token exists
+    if (!token) {
+        return res.status(401).json({ success: false, msg: 'Unauthorized: No token provided' });
+    }
+
+    try {
+        // Verify token
+        const decoded = jwt.verify(token, 'your_secret_key');
+        const userId = decoded.userId;
+
+        // Find user by ID
+        const user = await UserModel.findById(userId);
+
+        // Check if user exists
+        if (!user) {
+            return res.status(404).json({ success: false, msg: 'User not found' });
+        }
+
+        // Verify old password
+        const isPasswordValid = await bcrypt.compare(oldPassword, user.password);
+        if (!isPasswordValid) {
+            return res.status(400).json({ success: false, msg: 'Invalid old password' });
+        }
+        // Hash the new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10); // 10 is the saltRounds
+
+        // Update password
+        user.password = hashedPassword;
+        await user.save();
+
+        res.status(200).json({ success: true, msg: 'Password updated successfully' });
     } catch (error) {
         console.error(error);
         return res.status(500).json({ success: false, msg: 'Internal Server Error' });
@@ -209,4 +248,52 @@ exports.UpdateUserPhoto = asyncHandler(async (req, res) => {
             res.status(500).json({ success: false, message: 'Internal Server Error' });
         }
     });
+});
+
+
+//// List user information based on token
+exports.listUserInfo = asyncHandler(async (req, res) => {
+    const token = req.headers.token;
+
+    // Check if token exists
+    if (!token) {
+        return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
+    }
+
+    try {
+        // Verify token
+        const decoded = jwt.verify(token, 'your_secret_key');
+        const userId = decoded.userId;
+
+        // Fetch user information
+        const userInfo = await User.findById(userId).select('username email phone location favorites image');
+
+        if (!userInfo) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        res.status(200).json({ success: true, data: userInfo });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+//// List user information based on his id
+exports.getUserInfoById = asyncHandler(async (req, res) => {
+    try {
+        const userId = req.params.userId; // Assuming userId is passed as a route parameter
+
+        // Fetch user information
+        const userInfo = await User.findById(userId).select('username email phone location favorites image');
+
+        if (!userInfo) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        res.status(200).json({ success: true, data: userInfo });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
 });

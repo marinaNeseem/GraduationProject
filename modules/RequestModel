@@ -1,0 +1,48 @@
+const mongoose = require('mongoose');
+
+// Create schema for Exchange Request
+const ExchangeRequestSchema = new mongoose.Schema({
+    request_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        default: () => new mongoose.Types.ObjectId(),
+        index: { unique: true }
+    },
+    requester_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User', // Reference to the User model
+        required: true
+    },
+    requested_User_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User', // Reference to the User model
+        required: true
+    },
+    Item_offered_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Item', // Reference to the item model
+        required: true
+    },
+    Item_requested_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Item', // Reference to the item model
+        required: true
+    },
+    status: {
+        type: String,
+        enum: ['pending', 'accepted', 'rejected'],
+        default: 'pending'
+    },
+    created_at: {
+        type: Date,
+        default: Date.now
+    },
+    updated_at: {
+        type: Date,
+        default: Date.now
+    }
+});
+
+// Create model for Exchange Request
+const ExchangeRequestModel = mongoose.model('ExchangeRequest', ExchangeRequestSchema);
+
+module.exports = ExchangeRequestModel;

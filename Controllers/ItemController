@@ -6,6 +6,7 @@ const asyncHandler = require('express-async-handler');
 const multer = require('multer');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
+const { populate } = require('../modules/ItemModel');
 
 
 //Create item
@@ -29,7 +30,7 @@ exports.createItem = asyncHandler(async (req, res) => {
       }
 
       // Extract token from request headers
-      const token = req.headers.authorization;
+      const token = req.headers.token;
 
       // Check if token exists
       if (!token) {
@@ -40,7 +41,7 @@ exports.createItem = asyncHandler(async (req, res) => {
       const decoded = jwt.verify(token, 'your_secret_key');
       const userId = decoded.userId;
 
-      const { title, description, price, category, phone,condition } = req.body;
+      const { title, description, price, category, phone,condition,status } = req.body;
 
       // Create new item associated with the user identified by the token
       const item = await itemModel.create({
@@ -52,6 +53,7 @@ exports.createItem = asyncHandler(async (req, res) => {
           price,
           phone,
           condition,
+          status,
           image: req.file ? req.file.path : null // Save the path of the uploaded image
       });
 
@@ -285,5 +287,84 @@ exports.listSavedItems = asyncHandler(async (req, res) => {
   } catch (error) {
     console.error('Error listing saved items:', error);
     res.status(500).json({ error: 'Failed to list saved items' });
+  }
+});
+
+
+
+//search
+
+
+
+exports.search = asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 5;
+  const skip = (page - 1) * limit;
+
+  
+  const search = {};
+  if (req.query.search) {
+    search.title = { $regex: req.query.search, $options: 'i' }; // Case-insensitive partial match
+  }
+
+  const item = await itemModel.find(search)
+  .skip(skip)
+  .limit(limit)
+  .populate({ path: 'category' , select :"name" });
+
+  res.status(200).json({ page, limit, results: item.length, data: item });
+});
+
+
+//update itemstatus
+exports.updateItemStatus = asyncHandler(async (req, res) => {
+  // Extract the token from the request headers
+  const token = req.headers.token;
+
+  // Check if the token exists
+  if (!token) {
+    return res.status(401).json({ message: 'Unauthorized: Token not provided' });
+  }
+
+  try {
+    // Decode the token to extract user ID
+    const decoded = jwt.verify(token, 'your_secret_key');
+    const userId = decoded.userId;
+
+    // Query your database or wherever the user role is stored to get the user role
+    const user = await UserModel.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check if the user is an admin
+    if (user.role === 'admin') {
+      const itemId = req.params.itemId;
+      const { status } = req.body;
+
+      // Check if the provided status is valid
+      if (!['accepted', 'rejected'].includes(status)) {
+        return res.status(400).json({ message: 'Invalid status provided' });
+      }
+
+      // Find the item by ID and update its status
+      const updatedItem = await itemModel.findByIdAndUpdate(
+        itemId,
+        { status },
+        { new: true }
+      );
+
+      if (!updatedItem) {
+        return res.status(404).json({ message: 'Item not found' });
+      }
+
+      return res.json({ data: updatedItem });
+    } else {
+      return res.status(403).json({ message: 'Unauthorized: Only admins can update item status' });
+    }
+  } catch (error) {
+    console.log(error);
+    return res.status(401).json({ message: 'Unauthorized: Invalid token' });
   }
 });

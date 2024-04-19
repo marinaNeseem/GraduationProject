@@ -1,0 +1,165 @@
+const chatModel =require("../modules/ChatsModel");
+const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
+const UserModel = require('../modules/UserModel');
+//send mess
+exports.AddMessasege = async (req, res) => {
+  try {
+    // Extract token from request headers
+    const token = req.headers.token;
+    const decoded = jwt.verify(token, 'your_secret_key');
+    const from = decoded.userId;
+    const { Receiver_id, Message } = req.body;
+    const currentTime = new Date(); // Create a new Date object
+
+    // Format the current time as HH:MM
+    const formattedTime = currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    // Check if there's an existing chat room between the sender and receiver
+    const existingChatRoom = await chatModel.findOne({
+      users: { $all: [from, Receiver_id] }
+    });
+
+    if (existingChatRoom) {
+      // If chat room exists, add the message to it
+      existingChatRoom.messages.push({ text: Message, sender: from, Date: currentTime, time: formattedTime });
+      await existingChatRoom.save();
+      return res.status(200).json({ msg: "Message added to existing chat room" });
+    } else {
+      // If no existing chat room, create a new one
+      const newChatRoom = await chatModel.create({
+        users: [from, Receiver_id],
+        time: formattedTime, // Provide the time field for the chat room
+        messages: [{ text: Message, sender: from, Date: currentTime, time: formattedTime }] // Add message to the new chat room
+      });
+      return res.status(200).json({ msg: "Message added to a new chat room" });
+    }
+  } catch (error) {
+    // Handle errors
+    if (error instanceof mongoose.Error.ValidationError) {
+      const errors = Object.values(error.errors).map((val) => val.message);
+      return res.status(400).json({ success: false, message: errors });
+    }
+
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
+};
+
+
+//list all chat mess
+exports.getAllMessage = async (req, res) => {
+  try {
+    const { from, to } = req.params;
+    const messages = await chatModel.find({
+      users: { $all: [from, to] }
+    }).sort({ updatedAt: 1 }).populate({
+      path: 'messages.sender',
+      select: 'username' 
+    }).select('messages.text messages.sender messages.Date messages.time');
+
+    const ChatMessages = messages.map((msg) => {
+      const fromSelf = msg.sender && msg.sender.toString() === from;
+      return { fromSelf, messages: msg.messages };
+    });
+
+    res.status(200).json(ChatMessages);
+  } catch (error) {
+    if (error instanceof mongoose.Error.ValidationError) {
+      const errors = Object.values(error.errors).map((val) => val.message);
+      return res.status(400).json({ success: false, message: errors });
+    }
+
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
+};
+
+
+
+
+
+exports.getAllChats = async (req, res) => {
+  try {
+    // Extract token from request headers
+    const token = req.headers.token;
+    if (!token) {
+      return res.status(400).json({ success: false, message: "Token not provided" });
+    }
+    
+    // Decode the token to get the user ID
+    const decoded = jwt.verify(token, 'your_secret_key');
+    const userId = decoded.userId;
+
+    // Find all chat rooms where the user is involved
+    const chatRooms = await chatModel.find({
+      users: userId
+    }).populate({
+      path: 'users',
+      select: 'username _id' // Select both username and _id
+    });
+
+    // Extract necessary information from each chat room
+    const chats = chatRooms.map((room) => {
+      const otherUsers = room.users.filter(user => user._id.toString() !== userId); // Exclude the current user from the list of users in the chat
+      return {
+        chatId: room._id,
+        users: otherUsers.map(user => ({ userId: user._id, username: user.username })), // Extract user IDs and usernames
+        lastMessage: room.messages.length > 0 ? room.messages[room.messages.length - 1] : null // Get the last message in the chat, if any
+      };
+    });
+
+    // Sort the chats by the most recent activity (last message time or updatedAt)
+    const sortedChats = chats.sort((a, b) => {
+      const aTime = a.lastMessage ? new Date(a.lastMessage.Date) : new Date(a.updatedAt);
+      const bTime = b.lastMessage ? new Date(b.lastMessage.Date) : new Date(b.updatedAt);
+      return bTime - aTime;
+    });
+
+    res.status(200).json({ success: true, chats: sortedChats });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
+};
+
+
+/*
+//list all user's chats
+exports.getAllChats = async (req, res) => {
+  try {
+    // Extract token from request headers
+    const token = req.headers.token;
+    if (!token) {
+      return res.status(400).json({ success: false, message: "Token not provided" });
+    }
+    
+    // Decode the token to get the user ID
+    const decoded = jwt.verify(token, 'your_secret_key');
+    const userId = decoded.userId;
+
+    // Find all chat rooms where the user is involved
+    const chatRooms = await chatModel.find({
+      users: userId
+    }).populate({
+      path: 'users',
+      select: 'username _id' // Select both username and _id
+    });
+
+    // Extract necessary information from each chat room
+    const chats = chatRooms.map((room) => {
+      const otherUsers = room.users.filter(user => user._id.toString() !== userId); // Exclude the current user from the list of users in the chat
+      return {
+        chatId: room._id,
+        users: otherUsers.map(user => ({ userId: user._id, username: user.username })), // Extract user IDs and usernames
+        lastMessage: room.messages.length > 0 ? room.messages[room.messages.length - 1] : null // Get the last message in the chat, if any
+      };
+    });
+
+    res.status(200).json({ success: true, chats });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
+};
+*/
