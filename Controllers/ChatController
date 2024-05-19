@@ -2,7 +2,13 @@ const chatModel =require("../modules/ChatsModel");
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const UserModel = require('../modules/UserModel');
+const { emitMessage } = require('../Controllers/SocketIoController');
 //send mess
+
+
+
+
+
 exports.AddMessasege = async (req, res) => {
   try {
     // Extract token from request headers
@@ -32,6 +38,7 @@ exports.AddMessasege = async (req, res) => {
         time: formattedTime, // Provide the time field for the chat room
         messages: [{ text: Message, sender: from, Date: currentTime, time: formattedTime }] // Add message to the new chat room
       });
+      emitMessage(Message, from, currentTime);
       return res.status(200).json({ msg: "Message added to a new chat room" });
     }
   } catch (error) {
@@ -46,7 +53,7 @@ exports.AddMessasege = async (req, res) => {
   }
 };
 
-
+/*
 //list all chat mess
 exports.getAllMessage = async (req, res) => {
   try {
@@ -55,12 +62,40 @@ exports.getAllMessage = async (req, res) => {
       users: { $all: [from, to] }
     }).sort({ updatedAt: 1 }).populate({
       path: 'messages.sender',
-      select: 'username' 
+      select: '_id' 
     }).select('messages.text messages.sender messages.Date messages.time');
 
     const ChatMessages = messages.map((msg) => {
       const fromSelf = msg.sender && msg.sender.toString() === from;
       return { fromSelf, messages: msg.messages };
+    });
+
+    res.status(200).json(ChatMessages);
+  } catch (error) {
+    if (error instanceof mongoose.Error.ValidationError) {
+      const errors = Object.values(error.errors).map((val) => val.message);
+      return res.status(400).json({ success: false, message: errors });
+    }
+
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
+};
+*/
+exports.getAllMessage = async (req, res) => {
+  try {
+    const { from, to } = req.params;
+    const messages = await chatModel.find({
+      users: { $all: [from, to] }
+    }).sort({ updatedAt: 1 }).populate({
+      path: 'messages.sender',
+      select: '_id' 
+    }).select('messages.text messages.sender messages.Date messages.time');
+
+    const ChatMessages = messages.map((msg) => {
+      const fromSelf = msg.sender && msg.sender.toString() === from;
+      // Modify the sender property to only include the sender's ID
+      return { fromSelf, messages: msg.messages.map(m => ({ text: m.text, sender: m.sender._id, Date: m.Date, time: m.time })) };
     });
 
     res.status(200).json(ChatMessages);

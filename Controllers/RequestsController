@@ -30,8 +30,6 @@ exports.listOfferedItems = asyncHandler(async (req, res) => {
 
 
 //wait for test with the front end
-
-
 //request exchange
 exports.createExchangeRequest1 = asyncHandler(async (req, res) => {
     try {
@@ -90,7 +88,6 @@ if (!mongoose.Types.ObjectId.isValid(Item_requested_id)) {
 });
 
 
-
 /*
 
 // Function to retrieve all exchange requests
@@ -127,3 +124,59 @@ async function deleteExchangeRequest(req, res) {
 }
 
 */
+
+//respondToExchangeRequest
+
+exports.respondToExchangeRequest = asyncHandler(async (req, res) => {
+    try {
+        const requestId = req.params.requestId;
+        const response = req.body.response; // 'accepted' or 'rejected'
+
+        // Check if the response is valid
+        if (response !== 'accepted' && response !== 'rejected') {
+            return res.status(400).json({ error: 'Invalid response. Response must be either "accepted" or "rejected"' });
+        }
+
+        // Extract user ID from the token
+        const decoded = jwt.verify(req.headers.token, 'your_secret_key');
+        const userId = decoded.userId;
+
+        // Find the exchange request by ID
+        const exchangeRequest = await ExchangeRequestModel.findById(requestId);
+
+        // Check if the exchange request exists
+        if (!exchangeRequest) {
+            return res.status(404).json({ error: 'Exchange request not found' });
+        }
+
+        // Check if the user is authorized to respond to this request
+        if (exchangeRequest.requested_User_id.toString() !== userId) {
+            return res.status(403).json({ error: 'You are not authorized to respond to this exchange request' });
+        }
+
+        // Update the status of the exchange request based on the response
+        exchangeRequest.status = response;
+
+        // If the response is 'accepted', update the accepted_at field with the current timestamp
+        if (response === 'accepted') {
+            exchangeRequest.accepted_at = new Date();
+        }
+
+        // Save the updated exchange request
+        const updatedRequest = await exchangeRequest.save();
+
+        // If the request is accepted, mark the items as expired
+        if (response === 'accepted') {
+            // Update the status of the items to 'expired'
+            await ItemModel.updateMany(
+                { _id: { $in: [exchangeRequest.Item_offered_id, exchangeRequest.Item_requested_id] } },
+                { status: 'expired' }
+            );
+        }
+
+        res.status(200).json(updatedRequest);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: error.message });
+    }
+});

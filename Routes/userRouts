@@ -1,5 +1,5 @@
 const express = require('express');
-const {registerUser ,loginUser,UploadUserPhoto,updateUserInfo,UpdateUserPhoto,changePassword,getUserInfoById} = require('../Controllers/UserController');
+const {registerUser ,loginUser,UploadUserPhoto,updateUserInfo,UpdateUserPhoto,changePassword,getUserInfoById,getItemsbyUsertoken} = require('../Controllers/UserController');
 const router=express.Router();
 router.route('/register').post(registerUser);
 router.route('/login').post(loginUser);
@@ -9,4 +9,6 @@ router.route('/UpdateUserPhoto').put(UpdateUserPhoto);
 router.route('/changePassword').put(changePassword);
 router.route('/changePassword').put(changePassword);
 router.route('/getUserInfoById/:userId').get(getUserInfoById);
+router.route('/getUseritems').get(getItemsbyUsertoken);
+
 module.exports = router;

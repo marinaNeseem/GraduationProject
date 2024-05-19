@@ -1,0 +1,569 @@
+const UserModel = require('../modules/UserModel');
+const ItemModel=require('../modules/ItemModel')
+const ExchangeRequestModel = require('../modules/RequestModel');
+const CategoryModel = require('../modules/CategoryModel');
+const slugify = require('slugify');
+const asyncHandler = require('express-async-handler');
+const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const bcrypt = require('bcrypt');
+const User = require('../modules/UserModel');
+const mongoose = require('mongoose');
+const moment = require('moment');
+
+//login for admin Dashboard
+
+exports.loginAdmin = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        const user = await UserModel.findOne({ email });
+
+        if (!user) {
+            return res.status(400).json({ message: 'Email not found!' });
+        }
+
+        // Check if the user's role is 'admin'
+        if (user.role !== 'admin') {
+            return res.status(403).json({ message: 'You do not have permission to access this resource!' });
+        }
+
+        const passwordMatch = await bcrypt.compare(password, user.password);
+
+        if (passwordMatch) {
+            res.status(200).json({ message: 'Logged in successfully!', token: user.token });
+        } else {
+            res.status(400).json({ message: 'Incorrect password!' });
+        }
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+
+
+// list info of ADMIN
+exports.listAdminInfo = asyncHandler(async (req, res) => {
+    const token = req.headers.token;
+
+    // Check if token exists
+    if (!token) {
+        return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
+    }
+
+    try {
+        // Verify token
+        const decoded = jwt.verify(token, 'your_secret_key');
+
+        // Check if the user exists and is an admin
+        const user = await User.findById(decoded.userId);
+        if (!user || user.role !== 'admin') {
+            return res.status(403).json({ success: false, message: 'Forbidden: You do not have permission to access this resource' });
+        }
+
+        // Ensure that only admin user can access this information
+        if (user.role !== 'admin') {
+            return res.status(403).json({ success: false, message: 'Forbidden: You do not have permission to access this resource' });
+        }
+
+        // Construct the complete URL for the image
+        const imageUrl = `${req.protocol}://${req.get('host')}/${user.image}`;
+
+        // Fetch admin information including the password
+        const adminInfo = {
+            username: user.username,
+            email: user.email,
+            phone: user.phone,
+            password: user.password, // Include password here (not recommended for production)
+            location: user.location,
+            image: imageUrl, // Updated image URL
+            // Add more fields as needed
+        };
+
+        res.status(200).json({ success: true, data: adminInfo });
+    } catch (error) {
+        if (error instanceof jwt.TokenExpiredError) {
+            return res.status(401).json({ success: false, message: 'Unauthorized: Token expired' });
+        } else if (error instanceof jwt.JsonWebTokenError) {
+            return res.status(401).json({ success: false, message: 'Unauthorized: Invalid token' });
+        } else {
+            console.error(error);
+            res.status(500).json({ success: false, message: 'Internal Server Error' });
+        }
+    }
+});
+
+
+
+//List all users
+
+exports.getAllUsers = asyncHandler(async (req, res) => {
+    // Extract token from request headers
+    const token = req.headers.token;
+
+    if (!token) {
+        return res.status(401).json({ message: 'Authorization token is missing.' });
+    }
+
+    try {
+        // Verify the token
+        const decoded = jwt.verify(token, 'your_secret_key'); // Replace 'your_secret_key' with your actual JWT secret
+        const userId = decoded.userId;
+        const user = await UserModel.findById(userId);
+        // Check if the decoded token contains the role
+        if (user.role !== 'admin') {
+            return res.status(403).json({ message: 'Unauthorized access. Only admins can access this resource.' });
+        }
+
+        // Pagination parameters
+        const page = req.query.page * 1 || 1;
+        const limit = req.query.limit * 1 || 10;
+        const skip = (page - 1) * limit;
+
+        // Retrieve total number of users
+        const totalUsersCount = await UserModel.countDocuments();
+
+        // Check if requested page is out of range
+        const totalPages = Math.ceil(totalUsersCount / limit);
+        if (page > totalPages) {
+            return res.status(404).json({ message: 'Page out of range. There are no users on this page.' });
+        }
+
+        // Retrieve users
+        const users = await UserModel.find({}).skip(skip).limit(limit);
+
+        // Return response
+        res.status(200).json({ totalUsers: totalUsersCount, totalPages, currentPage: page, data: users });
+    }
+        catch (error) {
+            console.log(error);
+        return res.status(401).json({error:error.message });
+    }
+});
+
+
+//update user info (Unfinished yet)
+/*
+exports.updateUser = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { token } = req.headers;
+    const { username, email, password, phone, location, image } = req.body;
+
+    // Check if token exists
+    if (!token) {
+        return res.status(401).json({ success: false, msg: 'Unauthorized: No token provided' });
+    }
+
+    try {
+        // Verify token
+        const decoded = jwt.verify(token, 'your_secret_key');
+        const userId = decoded.userId;
+
+        // Retrieve the user from the database
+        const userToUpdate = await User.findById(id);
+
+        // Check if the user exists
+        if (!userToUpdate) {
+            return res.status(404).json({ success: false, msg: `No user found for this id: ${id}` });
+        }
+
+        // Check if the user is authorized to update
+        if (userToUpdate._id.toString() !== userId) {
+            return res.status(403).json({ success: false, msg: 'You are not authorized to update this user' });
+        }
+
+        // Update the user fields
+        userToUpdate.username = username;
+        userToUpdate.email = email;
+        userToUpdate.password = password; // Remember to hash the password if needed
+        userToUpdate.phone = phone;
+        userToUpdate.location = location;
+        userToUpdate.image = image;
+
+        // Save the updated user
+        const updatedUser = await userToUpdate.save();
+
+        res.status(200).json({ success: true, data: updatedUser });
+    } catch (error) {
+        console.error(error); // Log the error for debugging
+        return res.status(401).json({ success: false, msg: 'Unauthorized: Invalid token' });
+    }
+});*/
+
+
+//Admin Delete user
+
+exports.deleteuser = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { token } = req.headers;
+  
+    // Check if token exists
+    if (!token) {
+        return res.status(401).json({ success: false,msg: 'Unauthorized: No token provided' });
+    }
+  
+    try {
+        // Verify token
+        const decoded = jwt.verify(token, 'your_secret_key');
+        const userId = decoded.userId;
+  
+        
+        const Admin = await UserModel.findById(userId);
+        if (Admin.role!=='admin') {
+            return res.status(404).json({success: false, msg: `you Not authorized to delete this user` });
+        }
+  
+        const user = await UserModel.findById(id);
+       
+        if (!user) {
+            return res.status(404).json({success: false, msg: `No user found for this id: ${id}` });
+        }
+  
+      
+  
+        // Delete the user
+        await UserModel.findByIdAndDelete(id);
+  
+        res.status(200).json({success: true , msg: `The user with ID ${id} was successfully deleted` });
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        return res.status(500).json({success: false , msg: 'Internal server error' });
+    }
+  });
+  
+  
+  //// List user information based on his id with(number of posts and requests)
+exports.getUserInfoByIdWithNPostsRequests = asyncHandler(async (req, res) => {
+    try {
+        const userId = req.params.userId; // Assuming userId is passed as a route parameter
+
+        // Fetch user information
+        const userInfo = await User.findById(userId);
+
+        if (!userInfo) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        // Count the number of items posted by the user
+        const itemCount = await ItemModel.countDocuments({ user: userId });
+
+        // Count the number of requests made by the user
+        const requestCount = await ExchangeRequestModel.countDocuments({ requester_id: userId });
+
+        // Prepare the response data
+        const userData = {
+            _id: userInfo._id,
+            username: userInfo.username,
+            email: userInfo.email,
+            phone: userInfo.phone,
+            location: userInfo.location,
+            favorites: userInfo.favorites,
+            image: userInfo.image,
+            NumberOfPosts: itemCount,
+            NumberOfRequest: requestCount
+        };
+
+        res.status(200).json({ success: true, data: userData });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+//list All User requests
+exports.getUserRequests = asyncHandler(async (req, res) => {
+    try {
+        const userId = req.params.userId; // Assuming userId is passed as a route parameter
+
+        // Fetch all requests made by the user
+        const requests = await ExchangeRequestModel.find({ requester_id: userId })
+            .populate('requester_id', 'username') // Populate requester name
+            .populate('requested_User_id', 'username') // Populate requested user name
+            .populate('Item_offered_id', 'title') // Populate offered item title
+            .populate('Item_requested_id', 'title'); // Populate requested item title
+
+        if (!requests || requests.length === 0) {
+            return res.status(404).json({ success: false, message: 'No requests found for this user' });
+        }
+
+        // Prepare the response data
+        const requestData = requests.map(request => {
+            const timeDifference = getTimeDifference(request.created_at); // Calculate time difference
+            return {
+                requestId: request.request_id,
+                requesterName: request.requester_id.username,
+                requestedUserName: request.requested_User_id.username,
+                offeredItemTitle: request.Item_offered_id.title,
+                requestedItemTitle: request.Item_requested_id.title,
+                timeAgo: timeDifference
+            };
+        });
+
+        res.status(200).json({ success: true, data: requestData });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+// Function to calculate time difference from now
+function getTimeDifference(dateTime) {
+    const currentTime = new Date();
+    const timeDifference = currentTime - dateTime;
+    const seconds = Math.floor(timeDifference / 1000);
+    if (seconds < 60) {
+        return `${seconds} seconds ago`;
+    }
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) {
+        return `${minutes} minutes ago`;
+    }
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) {
+        return `${hours} hours ago`;
+    }
+    const days = Math.floor(hours / 24);
+    return `${days} days ago`;
+}
+
+
+
+//Dashboard Visualizations
+
+
+
+// count al transactions and Visualize it 
+
+
+exports.getTransactionCountByDay = asyncHandler(async (req, res) => {
+    try {
+        // Get the start and end of the current week
+        const startOfWeek = moment().startOf('week').toDate();
+        const endOfWeek = moment().endOf('week').toDate();
+
+        // Aggregate requests by day and count the number of requests for each day
+        const transactionCountByDay = await ExchangeRequestModel.aggregate([
+            {
+                $match: {
+                    created_at: { $gte: startOfWeek, $lte: endOfWeek }
+                }
+            },
+            {
+                $group: {
+                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$created_at" } },
+                    count: { $sum: 1 }
+                }
+            },
+            {
+                $sort: { _id: 1 } // Sort by date in ascending order
+            }
+        ]);
+
+        // Prepare the data for visualization
+        const visualizationData = transactionCountByDay.map(entry => ({
+            date: entry._id,
+            count: entry.count
+        }));
+
+        res.status(200).json({ success: true, data: visualizationData });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+
+
+exports.listAcceptedExchangeRequests = asyncHandler(async (req, res) => {
+    try {
+        // Find all accepted exchange requests and populate the referenced fields
+        const acceptedRequests = await ExchangeRequestModel.find({ status: 'accepted' })
+            .populate({
+                path: 'Item_offered_id',
+                model: 'Item',
+                select: 'title' // Select only the 'title' field of the Item document
+            })
+            .populate({
+                path: 'Item_requested_id',
+                model: 'Item',
+                select: 'title' // Select only the 'title' field of the Item document
+            })
+            .populate('requester_id requested_User_id');
+
+        // Map the accepted requests to the desired format
+        const formattedRequests = acceptedRequests.map(request => ({
+            request_id: request.request_id,
+            creation_date: request.created_at,
+            From: request.requester_id.username, // Assuming User model has a 'username' field
+            offered_item_name: request.Item_offered_id ? request.Item_offered_id.title : null, // Item title
+            To: request.requested_User_id.username, // Assuming User model has a 'username' field
+            requested_item_name: request.Item_requested_id ? request.Item_requested_id.title : null // Item title
+        }));
+
+        res.status(200).json(formattedRequests);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+exports.listExchangedItemsDetails = asyncHandler(async (req, res) => {
+    try {
+        // Retrieve the request ID from the request parameters or body
+        const requestId = req.params.requestId || req.body.requestId;
+
+        // Find the accepted exchange request with the provided request ID
+        const exchangeRequest = await ExchangeRequestModel.findById(requestId).populate('Item_offered_id Item_requested_id');
+
+        // Check if the exchange request exists
+        if (!exchangeRequest) {
+            return res.status(404).json({ error: 'Exchange request not found' });
+        }
+
+        // Retrieve the detailed information of the exchanged items
+        const offeredItemDetails = await ItemModel.findById(exchangeRequest.Item_offered_id);
+        const requestedItemDetails = await ItemModel.findById(exchangeRequest.Item_requested_id);
+
+        // Check if the item details are not null before accessing their properties
+        if (!offeredItemDetails || !requestedItemDetails) {
+            return res.status(404).json({ error: 'Item details not found' });
+        }
+
+        // Prepare the response object with the detailed information of the exchanged items
+        const exchangedItemsDetails = {
+            request_id: exchangeRequest.request_id,
+            offered_item: {
+                title: offeredItemDetails.title,
+                price: offeredItemDetails.price,
+                description: offeredItemDetails.Descreption,
+            },
+            requested_item: {
+                title: requestedItemDetails.title,
+                price: requestedItemDetails.price,
+                description: requestedItemDetails.Descreption,
+            }
+        };
+
+        res.status(200).json(exchangedItemsDetails);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+  //Get all items
+  exports.getItems =asyncHandler(async(req,res)=>{
+    //req from user as prams (pages,limit)
+const page =req.query.page*1 || 1;// to convert string to number(query returen string)
+const limit =req.query.limit*1||5;
+const skip =(page-1)*limit;
+const items = await ItemModel.find({}).skip(skip).limit(limit);
+res.status(200).json({TotalItems : items.length , page, data: items});  
+  });
+
+  // Get items by status
+exports.getItemsByStatus = asyncHandler(async (req, res) => {
+    // Extract status from request query parameters
+    const { status } = req.body;
+
+    // Validate status parameter
+    if (!status) {
+        return res.status(400).json({ error: 'Status parameter is required' });
+    }
+
+    // Convert status to lowercase for case-insensitive search
+    const lowerStatus = status.toLowerCase();
+
+    // Validate status value
+    const validStatusValues = ['pending', 'accepted', 'rejected', 'expired']; // Define valid status values
+    if (!validStatusValues.includes(lowerStatus)) {
+        return res.status(400).json({ error: 'Invalid status value' });
+    }
+
+    // Query items based on status
+    const items = await ItemModel.find({ status: lowerStatus });
+
+    // Return the filtered items
+    res.status(200).json({ TotalItems: items.length, status: lowerStatus, data: items });
+});
+
+
+//listCategoriesWithItemsCount(categories page)
+
+exports.listCategoriesWithItemsCount = async (req, res) => {
+    try {
+        // Retrieve all categories
+        const categories = await CategoryModel.find();
+
+        // Prepare the result array
+        const result = [];
+
+        // Loop through each category
+        for (const category of categories) {
+            // Count the number of items for this category
+            const itemCount = await ItemModel.countDocuments({ category: category._id });
+
+            // Format the creation date
+            const createdAt = category.createdAt.toLocaleDateString('en-US', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric'
+            });
+
+            // Add category details to the result array
+            result.push({
+                id: category._id,
+                name: category.name,
+                itemCount: itemCount,
+                createdAt: createdAt
+            });
+        }
+
+        // Send the result
+        res.status(200).json({ success: true, data: result });
+    } catch (error) {
+        // Handle errors
+        console.error(error);
+        res.status(500).json({ success: false, message: error.message  });
+    }
+};
+
+
+// delete category
+exports.deleteCategory = async (req, res) => {
+    const { id } = req.params;
+    const { token } = req.headers;
+
+    // Check if token exists
+    if (!token) {
+        return res.status(401).json({ success: false, msg: 'Unauthorized: No token provided' });
+    }
+
+    try {
+        // Verify token
+        const decoded = jwt.verify(token, 'your_secret_key');
+        const userId = decoded.userId;
+
+        // Check if the user is an admin
+        const admin = await UserModel.findById(userId);
+        if (admin.role !== 'admin') {
+            return res.status(403).json({ success: false, msg: 'Forbidden: You do not have permission to perform this action' });
+        }
+
+        // Find the category by ID
+        const category = await CategoryModel.findById(id);
+        if (!category) {
+            return res.status(404).json({ success: false, msg: `No category found for this ID: ${id}` });
+        }
+
+        // Delete all items associated with the category
+        await ItemModel.deleteMany({ category: id });
+
+        // Delete the category
+        await CategoryModel.findByIdAndDelete(id);
+
+        res.status(200).json({ success: true, msg: `The category with ID ${id} was successfully deleted` });
+    } catch (error) {
+        console.error('Error deleting category:', error);
+        return res.status(500).json({ success: false, msg: 'Internal server error' });
+    }
+};

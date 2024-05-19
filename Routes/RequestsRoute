@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { createExchangeRequest1,listOfferedItems } = require('../Controllers/RequestsController'); // Import as named import
+const { createExchangeRequest1,listOfferedItems ,respondToExchangeRequest} = require('../Controllers/RequestsController'); // Import as named import
 router.route('/listUserItems').get(listOfferedItems);
 router.route('/addrequest').post(createExchangeRequest1);
-
+router.route('/respondrequest/:requestId').put(respondToExchangeRequest);
 module.exports = router;

@@ -1,4 +1,5 @@
 const UserModel = require('../modules/UserModel');
+const ItemModel = require('../modules/ItemModel');
 const slugify = require('slugify');
 const asyncHandler = require('express-async-handler');
 const jwt = require('jsonwebtoken');
@@ -295,5 +296,29 @@ exports.getUserInfoById = asyncHandler(async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+// get user items by his token
+
+exports.getItemsbyUsertoken = asyncHandler(async (req, res) => {
+    const token = req.headers.token; // Assuming the token is passed in the Authorization header
+    if (!token) {
+        return res.status(401).json({ msg: 'Authorization token is missing' });
+    }
+
+    try {
+        const decoded = jwt.verify(token, 'your_secret_key'); // Verify and decode the token
+        const userId = decoded.userId; // Extract the user ID from the decoded token
+
+       
+        const item = await ItemModel.findOne({  user: userId }); // Query the item based on user ID
+        if (!item) {
+            return res.status(404).json({ msg: `No item found for this id ${id}` });
+        }
+
+        res.status(200).json({ data: item });
+    } catch (error) {
+        return res.status(401).json({ msg: error.message });
     }
 });

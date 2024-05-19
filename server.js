@@ -26,6 +26,7 @@ const categoryRoute=require('./Routes/categoreyRouts');
 const itemRoute= require('./Routes/itemRoute');
 const UserRoute= require('./Routes/userRouts');
 const ChatsRoute = require('./Routes/chatRoute');
+const AdminRoute =require('./Routes/AdminRoute');
 
 const RequestsRoute = require('./Routes/RequestsRoute'); 
 
@@ -55,10 +56,30 @@ dbConnection();
  app.use(express.json());//to convert string sended from postman to js.object
  app.use(cors());
 
+ 
+// Handle socket connections
+io.on('connection', (socket) => {
+  console.log('A user connected');
 
+  // Handle chat messages
+  socket.on('chat message', (msg) => {
+    console.log('message: ' + msg);
+
+    // Broadcast the message to all connected clients
+    io.emit('chat message', msg);
+  });
+
+  // Handle disconnections
+  socket.on('disconnect', () => {
+    console.log('User disconnected');
+  });
+});
+
+
+/*
  io.on("Connection",(socket)=>{
   console.log("connected");
- });
+ });*/
 
 if(process.env.Node_ENV=='development'){
   app.use(morgan('dev'));
@@ -79,6 +100,7 @@ app.use('/item',itemRoute);
 app.use('/User',UserRoute);
 app.use('/Request',RequestsRoute);
 app.use('/chat',ChatsRoute);
+app.use('/Admin',AdminRoute);
 
 const PORT=process.env.PORT||8000;//hy4of al port fe al env file ml2ho4 hya5od al odam al OR
   server.listen(PORT,()=>{
