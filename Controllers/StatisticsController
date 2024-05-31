@@ -1,0 +1,338 @@
+const UserModel = require('../modules/UserModel');
+const ItemModel=require('../modules/ItemModel')
+const ExchangeRequestModel = require('../modules/RequestModel');
+const CategoryModel= require('../modules/CategoryModel');
+const slugify = require('slugify');
+const asyncHandler = require('express-async-handler');
+const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const bcrypt = require('bcrypt');
+const mongoose = require('mongoose');
+const moment = require('moment');
+
+
+
+
+// Total transactions by day
+exports.totalTransactionsByDay = asyncHandler(async (req, res) => {
+    try {
+      const transactions = await ExchangeRequestModel.aggregate([
+        {
+          $project: {
+            date: { $dateToString: { format: '%Y-%m-%d', date: '$created_at' } },
+            dayOfWeek: { $dayOfWeek: '$created_at' }
+          }
+        },
+        {
+          $group: {
+            _id: { date: '$date', dayOfWeek: '$dayOfWeek' },
+            total: { $sum: 1 }
+          }
+        },
+        { $sort: { '_id.date': 1 } }
+      ]);
+  
+      // Compute the overall total
+      const overallTotal = await ExchangeRequestModel.aggregate([
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 }
+          }
+        }
+      ]);
+  
+      // Map MongoDB's day of the week (1 = Sunday, 7 = Saturday) to actual day names
+      const daysOfWeekMap = {
+        1: 'Sunday',
+        2: 'Monday',
+        3: 'Tuesday',
+        4: 'Wednesday',
+        5: 'Thursday',
+        6: 'Friday',
+        7: 'Saturday'
+      };
+  
+      const transactionsWithDayNames = transactions.map(transaction => ({
+        date: transaction._id.date,
+        day: daysOfWeekMap[transaction._id.dayOfWeek],
+        total: transaction.total
+      }));
+  
+      res.json({
+        dailyTotals: transactionsWithDayNames,
+        TotalTransactions: overallTotal[0] ? overallTotal[0].total : 0
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+  
+
+
+  // report Count
+exports.reportCount = asyncHandler(async (req, res) => {
+  try {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    console.log(`Filtering from date: ${sevenDaysAgo}`);
+
+    // Total counts in the last 7 days
+    const postsCount = await ItemModel.countDocuments({ 
+      created_at: { $gte: sevenDaysAgo }, 
+      status: 'accepted' 
+    });
+    const customersCount = await UserModel.countDocuments({ created_at: { $gte: sevenDaysAgo } });
+    const transactionsCount = await ExchangeRequestModel.countDocuments({ created_at: { $gte: sevenDaysAgo } });
+
+    console.log(`Posts count: ${postsCount}`);
+    console.log(`Customers count: ${customersCount}`);
+    console.log(`Transactions count: ${transactionsCount}`);
+
+    // Aggregated counts per day for posts
+    const postsPerDay = await ItemModel.aggregate([
+      { $match: { created_at: { $gte: sevenDaysAgo }, status: 'accepted' } },
+      {
+        $group: {
+          _id: { 
+            date: { $dateToString: { format: '%Y-%m-%d', date: '$created_at' } },
+            dayOfWeek: { $dayOfWeek: '$created_at' }
+          },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { '_id.date': 1 } }
+    ]);
+
+    // Aggregated counts per day for customers
+    const customersPerDay = await UserModel.aggregate([
+      { $match: { created_at: { $gte: sevenDaysAgo } } },
+      {
+        $group: {
+          _id: { 
+            date: { $dateToString: { format: '%Y-%m-%d', date: '$created_at' } },
+            dayOfWeek: { $dayOfWeek: '$created_at' }
+          },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { '_id.date': 1 } }
+    ]);
+
+    // Aggregated counts per day for transactions
+    const transactionsPerDay = await ExchangeRequestModel.aggregate([
+      { $match: { created_at: { $gte: sevenDaysAgo } } },
+      {
+        $group: {
+          _id: { 
+            date: { $dateToString: { format: '%Y-%m-%d', date: '$created_at' } },
+            dayOfWeek: { $dayOfWeek: '$created_at' }
+          },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { '_id.date': 1 } }
+    ]);
+
+    // Map MongoDB's day of the week (1 = Sunday, 7 = Saturday) to actual day names
+    const daysOfWeekMap = {
+      1: 'Sunday',
+      2: 'Monday',
+      3: 'Tuesday',
+      4: 'Wednesday',
+      5: 'Thursday',
+      6: 'Friday',
+      7: 'Saturday'
+    };
+
+    const addDayNames = (data) => {
+      return data.map(item => ({
+        _id: item._id.date,
+        day: daysOfWeekMap[item._id.dayOfWeek],
+        count: item.count
+      }));
+    };
+
+    res.json({
+      total: {
+        posts: postsCount,
+        customers: customersCount,
+        transactions: transactionsCount
+      },
+      daily: {
+        posts: addDayNames(postsPerDay),
+        customers: addDayNames(customersPerDay),
+        transactions: addDayNames(transactionsPerDay)
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+ 
+
+// Function to count the items in each category and return the category name and number of items
+exports.itemsCountByCategory = asyncHandler(async (req, res) => {
+  try {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    // Aggregated counts per category for items in the last 7 days
+    const itemsPerCategory = await ItemModel.aggregate([
+      { $match: { created_at: { $gte: sevenDaysAgo }, status: 'accepted' } },
+      {
+        $group: {
+          _id: '$category',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Join with the Category collection to get category names
+    const itemsPerCategoryWithNames = await CategoryModel.populate(itemsPerCategory, { path: '_id', select: 'name' });
+
+    const response = itemsPerCategoryWithNames.map(item => ({
+      category: item._id.name,
+      count: item.count
+    }));
+
+    res.json(response);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+// List all accepted exchange requests
+exports.listAcceptedExchangeRequests = asyncHandler(async (req, res) => {
+  try {
+    // Find all accepted exchange requests and populate the referenced fields
+    const acceptedRequests = await ExchangeRequestModel.find({ status: 'accepted' })
+      .populate({
+        path: 'Item_offered_id',
+        model: 'Item',
+        select: 'title' // Select only the 'title' field of the Item document
+      })
+      .populate({
+        path: 'Item_requested_id',
+        model: 'Item',
+        select: 'title' // Select only the 'title' field of the Item document
+      })
+      .populate('requester_id requested_User_id');
+
+    // Map the accepted requests to the desired format
+    const formattedRequests = acceptedRequests.map(request => ({
+      request_id: request._id, // Assuming '_id' is the unique identifier for the request
+      creation_date: request.created_at,
+      From: request.requester_id.username, // Assuming User model has a 'username' field
+      offered_item_name: request.Item_offered_id ? request.Item_offered_id.title : null, // Item title
+      To: request.requested_User_id.username, // Assuming User model has a 'username' field
+      requested_item_name: request.Item_requested_id ? request.Item_requested_id.title : null // Item title
+    }));
+
+    res.status(200).json(formattedRequests);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+
+// Get most recent posts (all items(rejected-accepted-pending))
+exports.getItems = asyncHandler(async (req, res) => {
+  try {
+    // Find all items and sort by creation date in descending order
+    const items = await ItemModel.find({})
+      .sort({ created_at: -1 }) // Sort by created_at field in descending order
+      .populate('category', ' name') // Populate the 'category' field and retrieve both '_id' and 'name'
+      .populate('user', 'username'); // Populate the 'user' field and retrieve the 'username' field
+
+    const formattedItems = items.map(item => ({
+      _id: item._id,
+      title: item.title,
+      description: item.description,
+      price: item.price,
+      category: item.category.name, // Retrieve category name
+      
+      user: item.user.username, // Retrieve the username of the user
+      condition: item.condition,
+      slug: item.slug,
+      image: item.image,
+      status: item.status,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at
+    }));
+
+    res.status(200).json({ TotalItems: items.length, data: formattedItems });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+
+// Get all users from the most recent 
+exports.getUsers = asyncHandler(async (req, res) => {
+  try {
+    // Find all users and sort by creation date in descending order
+    const users = await UserModel.find({})
+      .sort({ created_at: -1 }) // Sort by created_at field in descending order
+
+    const formattedUsers = users.map(user => ({
+      _id: user._id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      phone: user.phone,
+      location: user.location,
+      created_at: user.created_at,
+      updated_at: user.updated_at
+    }));
+
+    res.status(200).json({ TotalUsers: users.length, data: formattedUsers });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+
+// Most recent accepted posts (accepted items)
+exports.getacceptedItems = asyncHandler(async (req, res) => {
+  try {
+    // Query condition to retrieve only accepted items
+    const items = await ItemModel.find({ status: 'accepted' })
+      .sort({ created_at: -1 }) // Sort by created_at field in descending order
+      .populate('category', 'name') // Populate the 'category' field and retrieve 'name'
+      .populate('user', 'username'); // Populate the 'user' field and retrieve 'username'
+
+    const formattedItems = items.map(item => {
+      const createdDate = new Date(item.created_at);
+      const formattedDate = createdDate.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'long', // Month as a word
+        year: 'numeric'
+      });
+
+      return {
+        _id: item._id,
+        title: item.title,
+        Category: item.category.name,
+        user: item.user.username, // Retrieve the username instead of the user ID
+        status: item.status,
+        createdDate: formattedDate
+      };
+    });
+
+    res.status(200).json({ TotalItems: items.length, data: formattedItems });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: error.message });
+  }
+});

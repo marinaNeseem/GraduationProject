@@ -7,7 +7,6 @@ const asyncHandler = require('express-async-handler');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const bcrypt = require('bcrypt');
-const User = require('../modules/UserModel');
 const mongoose = require('mongoose');
 const moment = require('moment');
 
@@ -141,12 +140,11 @@ exports.getAllUsers = asyncHandler(async (req, res) => {
 });
 
 
-//update user info (Unfinished yet)
-/*
-exports.updateUser = asyncHandler(async (req, res) => {
+//delete user and all his (posts & Requests)
+
+  exports.deleteuser = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { token } = req.headers;
-    const { username, email, password, phone, location, image } = req.body;
 
     // Check if token exists
     if (!token) {
@@ -158,78 +156,36 @@ exports.updateUser = asyncHandler(async (req, res) => {
         const decoded = jwt.verify(token, 'your_secret_key');
         const userId = decoded.userId;
 
-        // Retrieve the user from the database
-        const userToUpdate = await User.findById(id);
-
-        // Check if the user exists
-        if (!userToUpdate) {
-            return res.status(404).json({ success: false, msg: `No user found for this id: ${id}` });
-        }
-
-        // Check if the user is authorized to update
-        if (userToUpdate._id.toString() !== userId) {
-            return res.status(403).json({ success: false, msg: 'You are not authorized to update this user' });
-        }
-
-        // Update the user fields
-        userToUpdate.username = username;
-        userToUpdate.email = email;
-        userToUpdate.password = password; // Remember to hash the password if needed
-        userToUpdate.phone = phone;
-        userToUpdate.location = location;
-        userToUpdate.image = image;
-
-        // Save the updated user
-        const updatedUser = await userToUpdate.save();
-
-        res.status(200).json({ success: true, data: updatedUser });
-    } catch (error) {
-        console.error(error); // Log the error for debugging
-        return res.status(401).json({ success: false, msg: 'Unauthorized: Invalid token' });
-    }
-});*/
-
-
-//Admin Delete user
-
-exports.deleteuser = asyncHandler(async (req, res) => {
-    const { id } = req.params;
-    const { token } = req.headers;
-  
-    // Check if token exists
-    if (!token) {
-        return res.status(401).json({ success: false,msg: 'Unauthorized: No token provided' });
-    }
-  
-    try {
-        // Verify token
-        const decoded = jwt.verify(token, 'your_secret_key');
-        const userId = decoded.userId;
-  
-        
+        // Check if the requester is an admin
         const Admin = await UserModel.findById(userId);
-        if (Admin.role!=='admin') {
-            return res.status(404).json({success: false, msg: `you Not authorized to delete this user` });
+        if (Admin.role !== 'admin') {
+            return res.status(403).json({ success: false, msg: 'You are not authorized to delete this user' });
         }
-  
+
+        // Check if the user to be deleted exists
         const user = await UserModel.findById(id);
-       
         if (!user) {
-            return res.status(404).json({success: false, msg: `No user found for this id: ${id}` });
+            return res.status(404).json({ success: false, msg: "No user found with this ID: ${id} "});
         }
-  
-      
-  
+
+        // Delete all transactions associated with the user
+        await ExchangeRequestModel.deleteMany({ 
+            $or: [
+                { requester_id: id },
+                { requested_User_id: id }
+            ]
+        });
+        // Delete all items associated with the user
+        await ItemModel.deleteMany({ user: id });
         // Delete the user
         await UserModel.findByIdAndDelete(id);
-  
-        res.status(200).json({success: true , msg: `The user with ID ${id} was successfully deleted` });
+
+        res.status(200).json({ success: true, msg:` The user with ID ${id} and all his transactions and Items were successfully deleted `});
     } catch (error) {
         console.error('Error deleting user:', error);
-        return res.status(500).json({success: false , msg: 'Internal server error' });
+        return res.status(500).json({ success: false, msg: 'Internal server error' });
     }
-  });
-  
+});
   
   //// List user information based on his id with(number of posts and requests)
 exports.getUserInfoByIdWithNPostsRequests = asyncHandler(async (req, res) => {
@@ -237,7 +193,7 @@ exports.getUserInfoByIdWithNPostsRequests = asyncHandler(async (req, res) => {
         const userId = req.params.userId; // Assuming userId is passed as a route parameter
 
         // Fetch user information
-        const userInfo = await User.findById(userId);
+        const userInfo = await UserModel.findById(userId);
 
         if (!userInfo) {
             return res.status(404).json({ success: false, message: 'User not found' });
@@ -325,53 +281,7 @@ function getTimeDifference(dateTime) {
     return `${days} days ago`;
 }
 
-
-
-//Dashboard Visualizations
-
-
-
-// count al transactions and Visualize it 
-
-
-exports.getTransactionCountByDay = asyncHandler(async (req, res) => {
-    try {
-        // Get the start and end of the current week
-        const startOfWeek = moment().startOf('week').toDate();
-        const endOfWeek = moment().endOf('week').toDate();
-
-        // Aggregate requests by day and count the number of requests for each day
-        const transactionCountByDay = await ExchangeRequestModel.aggregate([
-            {
-                $match: {
-                    created_at: { $gte: startOfWeek, $lte: endOfWeek }
-                }
-            },
-            {
-                $group: {
-                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$created_at" } },
-                    count: { $sum: 1 }
-                }
-            },
-            {
-                $sort: { _id: 1 } // Sort by date in ascending order
-            }
-        ]);
-
-        // Prepare the data for visualization
-        const visualizationData = transactionCountByDay.map(entry => ({
-            date: entry._id,
-            count: entry.count
-        }));
-
-        res.status(200).json({ success: true, data: visualizationData });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ success: false, message: 'Internal Server Error' });
-    }
-});
-
-
+// list accepted exchanged requests
 
 exports.listAcceptedExchangeRequests = asyncHandler(async (req, res) => {
     try {
@@ -406,6 +316,8 @@ exports.listAcceptedExchangeRequests = asyncHandler(async (req, res) => {
     }
 });
 
+// list  
+
 exports.listExchangedItemsDetails = asyncHandler(async (req, res) => {
     try {
         // Retrieve the request ID from the request parameters or body
@@ -434,12 +346,12 @@ exports.listExchangedItemsDetails = asyncHandler(async (req, res) => {
             offered_item: {
                 title: offeredItemDetails.title,
                 price: offeredItemDetails.price,
-                description: offeredItemDetails.Descreption,
+                Descreption: offeredItemDetails.Descreption,
             },
             requested_item: {
                 title: requestedItemDetails.title,
                 price: requestedItemDetails.price,
-                description: requestedItemDetails.Descreption,
+                Descreption: requestedItemDetails.Descreption,
             }
         };
 
@@ -567,3 +479,489 @@ exports.deleteCategory = async (req, res) => {
         return res.status(500).json({ success: false, msg: 'Internal server error' });
     }
 };
+
+
+
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'uploads/'); // Save the uploaded files to the 'uploads' directory
+    },
+    filename: function (req, file, cb) {
+        cb(null, file.fieldname + '-' + Date.now() + '.' + file.originalname.split('.').pop());
+    }
+  });
+  
+  const upload = multer({ storage: storage });
+
+
+
+// ADMIN ADD NEW Category******
+exports.createCategory = asyncHandler(async(req, res) => {
+    upload.single('image')(req, res, async (err) => {
+      if (err) {
+          console.log(err);
+          return res.status(400).json({ success: false, message: "Error uploading image" });
+      }
+    
+      const name = req.body.name;
+      const token = req.headers.token;
+      
+      // Check if there is a token provided in the header or not
+      if (!token) {
+        return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
+      }
+  
+       // Check if the category name ends with "category"
+       if (!name.toLowerCase().endsWith('category')) {
+        return res.status(400).json({ success: false, message: 'Category name must end with the word "category"' });
+      }
+      const decoded = jwt.verify(token, 'your_secret_key');
+      const userId = decoded.userId;
+  
+          // Construct the complete URL for the image
+          const imageUrl = req.file ?` ${req.protocol}://${req.get('host')}/${req.file.path}` : null;
+
+      try {
+        const category = await CategoryModel.create({
+          name,
+          slug: slugify(name),
+          user: userId,
+          image: imageUrl
+        });
+        res.status(200).json({ success: true, data: category });
+      } catch (error) {
+        // Check if the error is a validation error for the 'image' field
+        if (error.errors && error.errors.image) {
+          return res.status(400).json({ success: false, message: 'Image is Required' });
+        }
+        if(error.message.includes('duplicate key')){
+  
+          return res.status(400).json({success:false,message:'category name is already exist'});
+        }else{
+        // If it's not a validation error for the 'image' field, return the generic error message
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+        console.log(error);}
+      }
+    });
+  });
+
+  
+
+//update itemstatus
+exports.updateItemStatus = asyncHandler(async (req, res) => {
+    // Extract the token from the request headers
+    const token = req.headers.token;
+  
+    // Check if the token exists
+    if (!token) {
+      return res.status(401).json({ message: 'Unauthorized: Token not provided' });
+    }
+  
+    try {
+      // Decode the token to extract user ID
+      const decoded = jwt.verify(token, 'your_secret_key');
+      const userId = decoded.userId;
+  
+      // Query your database or wherever the user role is stored to get the user role
+      const user = await UserModel.findById(userId);
+  
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+  
+      // Check if the user is an admin
+      if (user.role === 'admin') {
+        const itemId = req.params.itemId;
+        const { status } = req.body;
+  
+        // Check if the provided status is valid
+        if (!['accepted', 'rejected'].includes(status)) {
+          return res.status(400).json({ message: 'Invalid status provided' });
+        }
+  
+        // Find the item by ID and update its status
+        const updatedItem = await ItemModel.findByIdAndUpdate(
+          itemId,
+          { status },
+          { new: true }
+        );
+  
+        if (!updatedItem) {
+          return res.status(404).json({ message: 'Item not found' });
+        }
+  
+        return res.json({ data: updatedItem });
+      } else {
+        return res.status(403).json({ message: 'Unauthorized: Only admins can update item status' });
+      }
+    } catch (error) {
+      console.log(error);
+      return res.status(401).json({ message: 'Unauthorized: Invalid token' });
+    }
+  });
+
+
+
+
+
+
+// update all  admin info (except image)
+
+exports.updateAdminInfo = asyncHandler(async (req, res) => {
+    const token = req.headers.token;
+    const { username, email, phone, city, governorate } = req.body;
+
+    // Check if token exists
+    if (!token) {
+        return res.status(401).json({ success: false, msg: 'Unauthorized: No token provided' });
+    }
+
+    try {
+        // Verify token
+        const decoded = jwt.verify(token, 'your_secret_key');
+        const userId = decoded.userId;
+
+        // Find the admin
+        const admin = await UserModel.findById(userId);
+
+        if (!admin) {
+            return res.status(404).json({ success: false, msg: 'Admin not found' });
+        }
+
+
+        // Prepare the update object
+        const updateData = {
+            username,
+            email,
+            phone,
+            
+        };
+
+        // Add location data if provided
+        if (city || governorate) {
+            updateData.location = {};
+            if (city) updateData.location.city = city;
+            if (governorate) updateData.location.governorate = governorate;
+        }
+
+        // Update the admin
+        const updatedAdmin = await UserModel.findByIdAndUpdate(
+            userId,
+            { $set: updateData },
+            { new: true }
+        ).select('-password'); // Exclude the password field from the returned data
+
+        if (!updatedAdmin) {
+            return res.status(500).json({ success: false, msg: 'Failed to update admin' });
+        } else {
+            // Reformat the response data
+            const responseData = {
+                _id: updatedAdmin._id,
+                username: updatedAdmin.username,
+                email: updatedAdmin.email,
+                phone: updatedAdmin.phone,
+                location: updatedAdmin.location, // Use the updated location
+                role: updatedAdmin.role,
+                createdAt: updatedAdmin.createdAt,
+                updatedAt: updatedAdmin.updatedAt,
+            };
+
+            console.log('Updated Admin Info:', responseData); // Log the updated admin info
+
+            res.status(200).json({ success: true, data: responseData });
+        }
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ success: false, msg: 'Internal Server Error' });
+    }
+});
+
+
+
+//upload Admin photo after registration
+//Upload Admin Photo
+const storagee = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'uploadsUsers/'); // Save the uploaded files to the 'uploads' directory
+    },
+    filename: function (req, file, cb) {
+        cb(null, file.fieldname + '-' + Date.now() + '.' + file.originalname.split('.').pop());
+    }
+  });
+  const uploadsUsers = multer({ storage: storagee });
+  
+  exports.UploadAdminPhoto = asyncHandler(async (req, res) => {
+    uploadsUsers.single('image')(req, res, async (err) => {
+      if (err) {
+        console.log(err);
+        return res.status(400).json({ success: false, message: "Error uploading image" });
+      }
+  
+      // Extract token from request headers
+      const token = req.headers.token;
+  
+      // Check if token exists
+      if (!token) {
+        return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
+      }
+  
+      try {
+        // Verify token
+        const decoded = jwt.verify(token, 'your_secret_key');
+        const userId = decoded.userId;
+  
+        const user = await User.findById(userId);
+        if (!user) {
+          return res.status(404).json({ success: false, msg: `No user found for this id ${userId}` });
+        }else{
+  
+        // Update user's photo
+        const imageUrl = req.file ?` ${req.protocol}://${req.get('host')}/${req.file.path}` : null;
+        user.image=imageUrl;
+        await user.save();
+
+ // Reformat the response data
+ const responseData = {
+   
+    username: user.username,
+    email: user.email,
+    phone: user.phone,
+    image: user.image, // Include the updated image
+    role: user.role,
+   
+};
+
+
+
+  
+        res.status(200).json({ success: true, responseData });
+    }
+      } catch (error) {
+        console.log(error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+      }
+    });
+  });
+  
+
+
+
+  // Function to search items in the exchange requests list by item title
+exports.searchItemsInExchangeRequests = asyncHandler(async (req, res) => {
+    const page = req.query.page * 1 ||1 ;
+    const limit = req.query.limit * 1||5;
+    const skip = (page - 1) * limit;
+    let matchStage = { status: 'accepted' }; // Only accepted requests
+
+    // Check if there's a search query
+    if (req.query.search) {
+        matchStage.$or = [
+            { 'requested_items.title': { $regex: req.query.search, $options: 'i' } },
+            { 'offered_items.title': { $regex: req.query.search, $options: 'i' } }
+        ];
+    }
+
+    // Aggregation pipeline to search items in the exchange requests
+    const exchangeRequests = await ExchangeRequestModel.aggregate([
+        {
+            $lookup: {
+                from: 'items', // Name of the items collection
+                localField: 'Item_requested_id', // Field from ExchangeRequestModel to join on
+                foreignField: '_id', // Field from ItemModel to join on
+                as: 'requested_items' // Name of the output array field
+            }
+        },
+        {
+            $lookup: {
+                from: 'items', // Name of the items collection
+                localField: 'Item_offered_id', // Field from ExchangeRequestModel to join on
+                foreignField: '_id', // Field from ItemModel to join on
+                as: 'offered_items' // Name of the output array field
+            }
+        },
+        {
+            $unwind: '$requested_items'
+        },
+        {
+            $unwind: '$offered_items'
+        },
+        {
+            $match: matchStage
+        },
+        {
+            $skip: skip
+        },
+        {
+            $limit: limit
+        },
+        {
+            $project: {
+                'request_id': 1,
+                'requested_items.title': 1, // Include only the title of requested items
+                'offered_items.title': 1 // Include only the title of offered items
+            }
+        },
+        {
+            $sort: {
+                'requested_items.created_at': -1, // Sort by creation date in descending order
+                'offered_items.created_at': -1 // Sort by creation date in descending order
+            }
+        }
+    ]);
+
+    res.status(200).json({ TotalItems: exchangeRequests.length, page, data: exchangeRequests });
+});
+
+//Search Items By Title
+exports.SearchItemsByTitle = asyncHandler(async (req, res) => {
+    const page = req.query.page * 1 ||1 ;
+    const limit = req.query.limit * 1||5;
+    const skip = (page - 1) * limit;
+    let query = { status: 'pending' }; // Ensure only pending items are retrieved
+  
+    // Check if there's a search query
+    if (req.query.search) {
+        query.title = { $regex: req.query.search, $options: 'i' };
+        // 'i' option makes the search case-insensitive
+    }
+  
+    const items = await ItemModel.find(query)
+    .skip(skip)
+    .limit(limit)
+    .select('-__v') // Exclude the '__v' field from the result
+    .populate('user', 'username email') // Populate the 'user' field with 'username' and 'email'
+    .sort({ createdAt: -1 }); // Sort by creation date in descending order
+
+res.status(200).json({ TotalItems: items.length, page, data: items });
+});
+
+
+//Search Categories By Name
+exports.SearchCategoriesByName = asyncHandler(async (req, res) => {
+    const page = req.query.page * 1 ||1 ;
+    const limit = req.query.limit * 1||5;
+    const skip = (page - 1) * limit;
+    let query = {};
+  
+    // Check if there's a search query
+    if (req.query.search) {
+        query = { name: { $regex: req.query.search, $options: 'i' } };
+        // 'i' option makes the search case-insensitive
+    }
+  
+    const categories = await CategoryModel.find(query)
+        .skip(skip)
+        .limit(limit)
+        .select('-__v') // Exclude the '__v' field from the result
+        .populate('user', 'username email') // Populate the 'user' field with 'username' and 'email'
+        .sort({ createdAt: -1 }); // Sort by creation date in descending order
+  
+    res.status(200).json({ TotalCategories: categories.length, page, data: categories });
+  });
+
+//Search The Customers By Name
+exports.SearchUsersByName = asyncHandler(async (req, res) => {
+    const page = req.query.page * 1 ||1 ;
+    const limit = req.query.limit * 1||5;
+    const skip = (page - 1) * limit;
+    let query = {};
+  
+    // Check if there's a search query
+    if (req.query.search) {
+        query = { username: { $regex: req.query.search, $options: 'i' } };
+        // 'i' option makes the search case-insensitive
+    }
+  
+    const users = await UserModel.find(query)
+        .skip(skip)
+        .limit(limit)
+        .select('-__v -password') // Exclude the '__v' and 'password' fields from the result
+        .sort({ createdAt: -1 }); // Sort by creation date in descending order
+  
+    res.status(200).json({ TotalUsers: users.length, page, data: users });
+  });
+
+
+
+
+// Fliter accepted requests by dATE RANGE
+  exports.filterAcceptedRequestsByDateRange = asyncHandler(async (req, res) => {
+    try {
+        const { rangeOption } = req.body;
+        let startDate;
+
+        // Calculate the start date based on the selected option
+        switch (rangeOption) {
+            case '3_months':
+                startDate = new Date();
+                startDate.setMonth(startDate.getMonth() - 3);
+                break;
+            case '6_months':
+                startDate = new Date();
+                startDate.setMonth(startDate.getMonth() - 6);
+                break;
+            case '9_months':
+                startDate = new Date();
+                startDate.setMonth(startDate.getMonth() - 9);
+                break;
+            case '12_months':
+                startDate = new Date();
+                startDate.setFullYear(startDate.getFullYear() - 1);
+                break;
+            default:
+                return res.status(400).json({ error: 'Invalid range option' });
+        }
+
+        // Query the ExchangeRequestModel for accepted requests within the specified date range
+        const acceptedRequests = await ExchangeRequestModel.find({
+            status: 'accepted',
+            accepted_at: { $gte: startDate }
+        });
+
+        res.status(200).json({ data: acceptedRequests });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// FILTER PENDING ITEMS BY DATE RANGE
+exports.filterPendingItemsByDateRange = asyncHandler(async (req, res) => {
+    try {
+        const { rangeOption } = req.body;
+        let startDate;
+
+        // Calculate the start date based on the selected option
+        switch (rangeOption) {
+            case '3_months':
+                startDate = new Date();
+                startDate.setMonth(startDate.getMonth() - 3);
+                break;
+            case '6_months':
+                startDate = new Date();
+                startDate.setMonth(startDate.getMonth() - 6);
+                break;
+            case '9_months':
+                startDate = new Date();
+                startDate.setMonth(startDate.getMonth() - 9);
+                break;
+            case '12_months':
+                startDate = new Date();
+                startDate.setFullYear(startDate.getFullYear() - 1);
+                break;
+            default:
+                return res.status(400).json({ error: 'Invalid range option' });
+        }
+
+        // Find pending items created within the specified date range
+        const pendingItems = await ItemModel.find({
+            status: 'pending',
+            created_at: { $gte: startDate }
+        });
+
+        res.status(200).json({ data: pendingItems });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: error.message });
+    }
+});

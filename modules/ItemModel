@@ -46,10 +46,27 @@ status: {
     type: String,
      enum: ['pending', 'accepted', 'rejected'],
      default: 'pending' },
+
+
+     created_at: {
+        type: Date,
+        default: Date.now
+    },
+    updated_at: {
+        type: Date,
+        default: Date.now
+    }
+
+
+
+
 },
-{//to bring newset proudacts from db
-    timestamps:true
+
+{
 });
+
+
+
 //2-create model
  const ItemModel = mongoose.model('Item',ItemSchema);
   module.exports = ItemModel;

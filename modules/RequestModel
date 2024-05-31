@@ -2,11 +2,7 @@ const mongoose = require('mongoose');
 
 // Create schema for Exchange Request
 const ExchangeRequestSchema = new mongoose.Schema({
-    request_id: {
-        type: mongoose.Schema.Types.ObjectId,
-        default: () => new mongoose.Types.ObjectId(),
-        index: { unique: true }
-    },
+   
     requester_id: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User', // Reference to the User model

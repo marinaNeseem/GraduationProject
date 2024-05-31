@@ -1,0 +1,17 @@
+const express = require('express');
+const { totalTransactionsByDay,
+    reportCount,
+    itemsCountByCategory,
+    listAcceptedExchangeRequests,
+    getItems,
+    getUsers,
+    getacceptedItems } =require('../Controllers/StatisticsController');
+const router=express.Router();
+router.route('/totalTransactionsByDay').get(totalTransactionsByDay);
+router.route('/reportCount').get(reportCount);
+router.route('/itemsCountByCategory').get(itemsCountByCategory);
+router.route('/listAcceptedExchangeRequests').get(listAcceptedExchangeRequests);
+router.route('/getItems').get(getItems);
+router.route('/getUsers').get(getUsers);
+router.route('/getacceptedItems').get(getacceptedItems);
+module.exports=router;

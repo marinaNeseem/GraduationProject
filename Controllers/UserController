@@ -105,10 +105,25 @@ const storagee = multer.diskStorage({
         }else{
   
         // Update user's photo
-        user.image = req.file ? req.file.path : null;
+        const imageUrl = req.file ?` ${req.protocol}://${req.get('host')}/${req.file.path}` : null;
+        user.image=imageUrl;
         await user.save();
+
+ // Reformat the response data
+ const responseData = {
+   
+    username: user.username,
+    email: user.email,
+    phone: user.phone,
+    image: user.image, // Include the updated image
+    role: user.role,
+   
+};
+
+
+
   
-        res.status(200).json({ success: true, data: user });
+        res.status(200).json({ success: true, responseData });
     }
       } catch (error) {
         console.log(error);

@@ -8,7 +8,9 @@ const cors =require("cors");
 //Express app
 const app = express();
 
-
+app.use("/Uploads",express.static('Uploads'));
+app.use("/uploadsCategories",express.static('uploadsCategories'));
+app.use("/uploadsUsers",express.static('uploadsUsers'));
 
 var server=http.createServer(app);
 
@@ -27,7 +29,7 @@ const itemRoute= require('./Routes/itemRoute');
 const UserRoute= require('./Routes/userRouts');
 const ChatsRoute = require('./Routes/chatRoute');
 const AdminRoute =require('./Routes/AdminRoute');
-
+const statisticsRoute =require('./Routes/statisticsRoute');
 const RequestsRoute = require('./Routes/RequestsRoute'); 
 
 
@@ -101,7 +103,7 @@ app.use('/User',UserRoute);
 app.use('/Request',RequestsRoute);
 app.use('/chat',ChatsRoute);
 app.use('/Admin',AdminRoute);
-
+app.use('/Stat',statisticsRoute);
 const PORT=process.env.PORT||8000;//hy4of al port fe al env file ml2ho4 hya5od al odam al OR
   server.listen(PORT,()=>{
     console.log(`app is runing on port ${PORT}`);

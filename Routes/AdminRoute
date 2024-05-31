@@ -1,9 +1,26 @@
 const express = require('express');
-const {getAllUsers ,deleteuser,getUserInfoByIdWithNPostsRequests,
-    getUserRequests,getTransactionCountByDay,
-    listAcceptedExchangeRequests,listExchangedItemsDetails
-    ,getItems,getItemsByStatus,loginAdmin,listAdminInfo,
-    listCategoriesWithItemsCount,deleteCategory
+const {getAllUsers ,
+    deleteuser,
+    getUserInfoByIdWithNPostsRequests,
+    getUserRequests,
+    listAcceptedExchangeRequests,
+    listExchangedItemsDetails
+    ,getItems,
+    getItemsByStatus,
+    loginAdmin,
+    listAdminInfo,
+    listCategoriesWithItemsCount,
+    deleteCategory,
+    createCategory,
+    updateItemStatus,
+    updateAdminInfo,
+    UploadAdminPhoto,
+    searchItemsInExchangeRequests,
+    SearchCategoriesByName,
+    SearchUsersByName,
+    SearchItemsByTitle,
+    filterAcceptedRequestsByDateRange,
+    filterPendingItemsByDateRange
 } =require('../Controllers/AdminDashboardController');
 const router=express.Router();
 router.route('/').get(getAllUsers); 
@@ -12,13 +29,31 @@ router.route('/deleteUser/:id').delete(deleteuser);
 router.route('/deleteCategory/:id').delete(deleteCategory);
 router.route('/InfoWithNumberOfRequestsPosts/:userId').get(getUserInfoByIdWithNPostsRequests); 
 router.route('/ListUserRequests/:userId').get(getUserRequests); 
-router.route('/getransctionsV').get(getTransactionCountByDay); 
+
 router.route('/admininfo').get(listAdminInfo);
+
 //
 router.route('/loginAdmin').post(loginAdmin);
+router.route('/UploadAdminPhoto').post(UploadAdminPhoto);
 router.route('/listAcceptedExchangeRequests').get(listAcceptedExchangeRequests);
 router.route('/listExchangedItemsDetails').get(listExchangedItemsDetails);
 router.route('/getItems').get(getItems);
 router.route('/getItemsByStatus').get(getItemsByStatus);
+router.route('/status/:itemId').put(updateItemStatus);
+router.route('/createCategory').post(createCategory);
+router.route('/updateAdminInfo').put(updateAdminInfo);
+
+router.route('/searchItemsInRequests').get(searchItemsInExchangeRequests);
+router.route('/SearchCategoriesByName').get(SearchCategoriesByName);
+router.route('/SearchUsersByName').get(SearchUsersByName);
+router.route('/SearchItemsByTitle').get(SearchItemsByTitle);
+router.route('/filterRequestsByDate').get(filterAcceptedRequestsByDateRange);
+router.route('/filterPendingItemsByDate').get(filterPendingItemsByDateRange);
+
+
+
+
+
+
 
 module.exports=router;

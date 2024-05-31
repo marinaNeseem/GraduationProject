@@ -12,7 +12,6 @@ const ItemModel = require('../modules/ItemModel');
 
 
 //Create item
-
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
       cb(null, 'uploads/'); // Save the uploaded files to the 'uploads' directory
@@ -38,39 +37,42 @@ exports.createItem = asyncHandler(async (req, res) => {
       if (!token) {
           return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
       }
-      try{
-      // Verify token
-      const decoded = jwt.verify(token, 'your_secret_key');
-      const userId = decoded.userId;
 
-      const { title, Descreption, price, category, phone,condition,status } = req.body;
+      try {
+          // Verify token
+          const decoded = jwt.verify(token, 'your_secret_key');
+          const userId = decoded.userId;
 
-      // Create new item associated with the user identified by the token
-      const item = await itemModel.create({
-          title,
-          slug: slugify(title),
-          Descreption,
-          user: userId, // Associate the item with the user identified by the token
-          category,
-          price,
-          phone,
-          condition,
-          status,
-          image: req.file ? req.file.path : null // Save the path of the uploaded image
-      });
+          const { title, Descreption, price, category, phone, condition, status } = req.body;
 
-      res.status(201).json({ success: true, data: item });
+          // Construct the complete URL for the image
+          const imageUrl = req.file ?` ${req.protocol}://${req.get('host')}/${req.file.path}` : null;
 
-     } catch (error) {
+          // Create new item associated with the user identified by the token
+          const item = await itemModel.create({
+              title,
+              slug: slugify(title),
+              Descreption,
+              user: userId, // Associate the item with the user identified by the token
+              category,
+              price,
+              phone,
+              condition,
+              status,
+              image: imageUrl // Save the constructed URL of the uploaded image
+          });
 
+          res.status(201).json({ success: true, data: item });
+
+      } catch (error) {
           // Handle Mongoose validation errors
           if (error instanceof mongoose.Error.ValidationError) {
-            const errors = Object.values(error.errors).map((val) => val.message);
-            return res.status(400).json({ success: false, message: errors });
+              const errors = Object.values(error.errors).map((val) => val.message);
+              return res.status(400).json({ success: false, message: errors });
           }
-  
-        console.log(error);
-        res.status(500).json({ success: false, message: 'Internal Server Error' });
+
+          console.log(error);
+          res.status(500).json({ success: false, message: 'Internal Server Error' });
       }
   });
 });
@@ -78,41 +80,6 @@ exports.createItem = asyncHandler(async (req, res) => {
 
 
 
-// Get all items
-exports.getItems = asyncHandler(async (req, res) => {
-  // req from user as params (pages, limit)
-  const page = req.query.page * 1 || 1; // Convert string to number (query returns string)
-  const limit = req.query.limit * 1 || 5;
-  const skip = (page - 1) * limit;
-  const items = await itemModel.find({})
-    .skip(skip)
-    .limit(limit)
-    .populate('category', '_id name'); // Populate the 'category' field and retrieve both '_id' and 'name'
-
-  const formattedItems = items.map(item => ({
-    _id: item._id,
-    title: item.title,
-    description: item.description,
-    price: item.price,
-    Category: {
-      _id: item.category._id, // Retrieve category ID
-      name: item.category.name // Retrieve category name
-    },
-    user: item.user,
-    condition: item.condition,
-    slug: item.slug,
-    image: item.image,
-    status: item.status,
-    createdAt: item.createdAt,
-    updatedAt: item.updatedAt, 
-     imageUrl: `/uploads/${item.image}`
-  }));
-
-  res.status(200).json({ TotalItems: items.length, page, data: formattedItems });
-});
-
-
-/*
  //Get all items
 exports.getItems = asyncHandler(async (req, res) => {
   //req from user as params (pages, limit)
@@ -143,7 +110,7 @@ exports.getItems = asyncHandler(async (req, res) => {
   }));
 
   res.status(200).json({ TotalItems: items.length, page, data: formattedItems });
-});*/
+});
 
 
   //get spisific item by id
@@ -378,58 +345,6 @@ exports.search = asyncHandler(async (req, res) => {
 });
 
 
-//update itemstatus
-exports.updateItemStatus = asyncHandler(async (req, res) => {
-  // Extract the token from the request headers
-  const token = req.headers.token;
-
-  // Check if the token exists
-  if (!token) {
-    return res.status(401).json({ message: 'Unauthorized: Token not provided' });
-  }
-
-  try {
-    // Decode the token to extract user ID
-    const decoded = jwt.verify(token, 'your_secret_key');
-    const userId = decoded.userId;
-
-    // Query your database or wherever the user role is stored to get the user role
-    const user = await UserModel.findById(userId);
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Check if the user is an admin
-    if (user.role === 'admin') {
-      const itemId = req.params.itemId;
-      const { status } = req.body;
-
-      // Check if the provided status is valid
-      if (!['accepted', 'rejected'].includes(status)) {
-        return res.status(400).json({ message: 'Invalid status provided' });
-      }
-
-      // Find the item by ID and update its status
-      const updatedItem = await itemModel.findByIdAndUpdate(
-        itemId,
-        { status },
-        { new: true }
-      );
-
-      if (!updatedItem) {
-        return res.status(404).json({ message: 'Item not found' });
-      }
-
-      return res.json({ data: updatedItem });
-    } else {
-      return res.status(403).json({ message: 'Unauthorized: Only admins can update item status' });
-    }
-  } catch (error) {
-    console.log(error);
-    return res.status(401).json({ message: 'Unauthorized: Invalid token' });
-  }
-});
 
 //recentyly posted items & list items without limit and skip(see All)
 exports.RecentItems= asyncHandler(async (req, res) => {

@@ -29,7 +29,7 @@ const userSchema = new mongoose.Schema({
         default: 'user',
     },
     phone: {
-        type: Number,
+        type: String,
         trim: true,
     },
     location: {
@@ -52,13 +52,23 @@ const userSchema = new mongoose.Schema({
     },
     image:{
         type:String,
+    },
+
+    
+    created_at: {
+        type: Date,
+        default: Date.now
+    },
+    updated_at: {
+        type: Date,
+        default: Date.now
     }
 ,
 
     // Add more fields as needed for your user model
     // ...
 }, {
-    timestamps: true, // Adds createdAt and updatedAt fields
+   
 });
 
 const User = mongoose.model('User', userSchema);

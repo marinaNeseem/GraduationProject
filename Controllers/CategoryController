@@ -19,52 +19,6 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-// ADMIN ADD NEW Category******
-exports.createCategory = asyncHandler(async(req, res) => {
-  upload.single('image')(req, res, async (err) => {
-    if (err) {
-        console.log(err);
-        return res.status(400).json({ success: false, message: "Error uploading image" });
-    }
-  
-    const name = req.body.name;
-    const token = req.headers.token;
-    
-    // Check if there is a token provided in the header or not
-    if (!token) {
-      return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
-    }
-
-     // Check if the category name ends with "category"
-     if (!name.toLowerCase().endsWith('category')) {
-      return res.status(400).json({ success: false, message: 'Category name must end with the word "category"' });
-    }
-    const decoded = jwt.verify(token, 'your_secret_key');
-    const userId = decoded.userId;
-
-    try {
-      const category = await CategoryModel.create({
-        name,
-        slug: slugify(name),
-        user: userId,
-        image: req.file ? req.file.path : null
-      });
-      res.status(200).json({ success: true, data: category });
-    } catch (error) {
-      // Check if the error is a validation error for the 'image' field
-      if (error.errors && error.errors.image) {
-        return res.status(400).json({ success: false, message: 'Image is Required' });
-      }
-      if(error.message.includes('duplicate key')){
-
-        return res.status(400).json({success:false,message:'category name is already exist'});
-      }else{
-      // If it's not a validation error for the 'image' field, return the generic error message
-      res.status(500).json({ success: false, message: 'Internal Server Error' });
-      console.log(error);}
-    }
-  });
-});
 
 
 // get all items of specific category (by category id)
