@@ -54,7 +54,7 @@ exports.listAdminInfo = asyncHandler(async (req, res) => {
         const decoded = jwt.verify(token, 'your_secret_key');
 
         // Check if the user exists and is an admin
-        const user = await User.findById(decoded.userId);
+        const user = await UserModel.findById(decoded.userId);
         if (!user || user.role !== 'admin') {
             return res.status(403).json({ success: false, message: 'Forbidden: You do not have permission to access this resource' });
         }
@@ -64,9 +64,6 @@ exports.listAdminInfo = asyncHandler(async (req, res) => {
             return res.status(403).json({ success: false, message: 'Forbidden: You do not have permission to access this resource' });
         }
 
-        // Construct the complete URL for the image
-        const imageUrl = `${req.protocol}://${req.get('host')}/${user.image}`;
-
         // Fetch admin information including the password
         const adminInfo = {
             username: user.username,
@@ -74,7 +71,7 @@ exports.listAdminInfo = asyncHandler(async (req, res) => {
             phone: user.phone,
             password: user.password, // Include password here (not recommended for production)
             location: user.location,
-            image: imageUrl, // Updated image URL
+            image: user.image, // Updated image URL
             // Add more fields as needed
         };
 
@@ -242,14 +239,14 @@ exports.getUserRequests = asyncHandler(async (req, res) => {
         }
 
         // Prepare the response data
-        const requestData = requests.map(request => {
+        const requestData = requests?.map(request => {
             const timeDifference = getTimeDifference(request.created_at); // Calculate time difference
             return {
-                requestId: request.request_id,
+                requestId: request._id,
                 requesterName: request.requester_id.username,
                 requestedUserName: request.requested_User_id.username,
-                offeredItemTitle: request.Item_offered_id.title,
-                requestedItemTitle: request.Item_requested_id.title,
+                offeredItemTitle: request.Item_offered_id?.title,
+                requestedItemTitle: request.Item_requested_id?.title,
                 timeAgo: timeDifference
             };
         });
@@ -301,7 +298,7 @@ exports.listAcceptedExchangeRequests = asyncHandler(async (req, res) => {
 
         // Map the accepted requests to the desired format
         const formattedRequests = acceptedRequests.map(request => ({
-            request_id: request.request_id,
+            request_id: request._id,
             creation_date: request.created_at,
             From: request.requester_id.username, // Assuming User model has a 'username' field
             offered_item_name: request.Item_offered_id ? request.Item_offered_id.title : null, // Item title
@@ -321,7 +318,7 @@ exports.listAcceptedExchangeRequests = asyncHandler(async (req, res) => {
 exports.listExchangedItemsDetails = asyncHandler(async (req, res) => {
     try {
         // Retrieve the request ID from the request parameters or body
-        const requestId = req.params.requestId || req.body.requestId;
+        const requestId = req.query.requestId || req.body.requestId;//updated by tony (query insted of params)
 
         // Find the accepted exchange request with the provided request ID
         const exchangeRequest = await ExchangeRequestModel.findById(requestId).populate('Item_offered_id Item_requested_id');
@@ -342,7 +339,7 @@ exports.listExchangedItemsDetails = asyncHandler(async (req, res) => {
 
         // Prepare the response object with the detailed information of the exchanged items
         const exchangedItemsDetails = {
-            request_id: exchangeRequest.request_id,
+            request_id: exchangeRequest._id,
             offered_item: {
                 title: offeredItemDetails.title,
                 price: offeredItemDetails.price,
@@ -363,14 +360,27 @@ exports.listExchangedItemsDetails = asyncHandler(async (req, res) => {
 });
 
   //Get all items
-  exports.getItems =asyncHandler(async(req,res)=>{
-    //req from user as prams (pages,limit)
-const page =req.query.page*1 || 1;// to convert string to number(query returen string)
-const limit =req.query.limit*1||5;
-const skip =(page-1)*limit;
-const items = await ItemModel.find({}).skip(skip).limit(limit);
-res.status(200).json({TotalItems : items.length , page, data: items});  
-  });
+  // Get all pending items
+exports.getItems = asyncHandler(async (req, res) => {
+    // req from user as params (page, limit)
+    const page = req.query.page * 1||  1; // Convert string to number (query returns string)
+    const limit = req.query.limit * 1 || 5;
+    const skip = (page - 1) * limit;
+
+    // Filter to get only pending items and populate user field to include the name
+    const items = await itemModel.find({ status: 'pending' })
+        .skip(skip)
+        .limit(limit)
+        .populate('user', 'username'); // Populate 'user' field and include only the 'name'
+
+    const totalPendingItems = await ItemModel.countDocuments({ status: 'pending' });
+
+    res.status(200).json({
+        TotalItems: totalPendingItems,
+        page,
+        data: items
+    });
+});
 
   // Get items by status
 exports.getItemsByStatus = asyncHandler(async (req, res) => {
@@ -690,7 +700,17 @@ const storagee = multer.diskStorage({
   });
   const uploadsUsers = multer({ storage: storagee });
   
-  exports.UploadAdminPhoto = asyncHandler(async (req, res) => {
+  exports.UploadAdminPhoto = asyncHandler(async (req, res) => {33333
+
+
+
+
+
+
+
+
+
+
     uploadsUsers.single('image')(req, res, async (err) => {
       if (err) {
         console.log(err);
@@ -710,7 +730,7 @@ const storagee = multer.diskStorage({
         const decoded = jwt.verify(token, 'your_secret_key');
         const userId = decoded.userId;
   
-        const user = await User.findById(userId);
+        const user = await UserModel.findById(userId);
         if (!user) {
           return res.status(404).json({ success: false, msg: `No user found for this id ${userId}` });
         }else{
