@@ -15,12 +15,7 @@ const {getAllUsers ,
     updateItemStatus,
     updateAdminInfo,
     UploadAdminPhoto,
-    searchItemsInExchangeRequests,
-    SearchCategoriesByName,
-    SearchUsersByName,
-    SearchItemsByTitle,
-    filterAcceptedRequestsByDateRange,
-    filterPendingItemsByDateRange
+   
 } =require('../Controllers/AdminDashboardController');
 const router=express.Router();
 router.route('/').get(getAllUsers); 
@@ -43,12 +38,6 @@ router.route('/status/:itemId').put(updateItemStatus);
 router.route('/createCategory').post(createCategory);
 router.route('/updateAdminInfo').put(updateAdminInfo);
 
-router.route('/searchItemsInRequests').get(searchItemsInExchangeRequests);
-router.route('/SearchCategoriesByName').get(SearchCategoriesByName);
-router.route('/SearchUsersByName').get(SearchUsersByName);
-router.route('/SearchItemsByTitle').get(SearchItemsByTitle);
-router.route('/filterRequestsByDate').get(filterAcceptedRequestsByDateRange);
-router.route('/filterPendingItemsByDate').get(filterPendingItemsByDateRange);
 
 
 

@@ -91,7 +91,7 @@ exports.listAdminInfo = asyncHandler(async (req, res) => {
 
 
 //List all users
-
+/*
 exports.getAllUsers = asyncHandler(async (req, res) => {
     // Extract token from request headers
     const token = req.headers.token;
@@ -134,7 +134,7 @@ exports.getAllUsers = asyncHandler(async (req, res) => {
             console.log(error);
         return res.status(401).json({error:error.message });
     }
-});
+});*/
 
 
 //delete user and all his (posts & Requests)
@@ -279,7 +279,7 @@ function getTimeDifference(dateTime) {
 }
 
 // list accepted exchanged requests
-
+/*
 exports.listAcceptedExchangeRequests = asyncHandler(async (req, res) => {
     try {
         // Find all accepted exchange requests and populate the referenced fields
@@ -311,7 +311,7 @@ exports.listAcceptedExchangeRequests = asyncHandler(async (req, res) => {
         console.log(error);
         res.status(500).json({ error: error.message });
     }
-});
+});*/
 
 // list  
 
@@ -361,6 +361,7 @@ exports.listExchangedItemsDetails = asyncHandler(async (req, res) => {
 
   //Get all items
   // Get all pending items
+  /*
 exports.getItems = asyncHandler(async (req, res) => {
     // req from user as params (page, limit)
     const page = req.query.page * 1||  1; // Convert string to number (query returns string)
@@ -380,7 +381,7 @@ exports.getItems = asyncHandler(async (req, res) => {
         page,
         data: items
     });
-});
+});*/
 
   // Get items by status
 exports.getItemsByStatus = asyncHandler(async (req, res) => {
@@ -410,7 +411,7 @@ exports.getItemsByStatus = asyncHandler(async (req, res) => {
 
 
 //listCategoriesWithItemsCount(categories page)
-
+/*
 exports.listCategoriesWithItemsCount = async (req, res) => {
     try {
         // Retrieve all categories
@@ -447,7 +448,7 @@ exports.listCategoriesWithItemsCount = async (req, res) => {
         console.error(error);
         res.status(500).json({ success: false, message: error.message  });
     }
-};
+};*/
 
 
 // delete category
@@ -700,7 +701,7 @@ const storagee = multer.diskStorage({
   });
   const uploadsUsers = multer({ storage: storagee });
   
-  exports.UploadAdminPhoto = asyncHandler(async (req, res) => {33333
+  exports.UploadAdminPhoto = asyncHandler(async (req, res) => {
 
 
 
@@ -764,224 +765,315 @@ const storagee = multer.diskStorage({
   });
   
 
+//List Accepted Requests with Item's Search And filter by date range(transactions page)
+exports.listAcceptedExchangeRequests = asyncHandler(async (req, res) => {
+    try {
+        // Pagination parameters
+        const page = req.query.page * 1  ||1;
+        const limit = req.query.limit * 1  ||5;
+        const skip = (page - 1) * limit;
 
+        // Filter and match stage
+        let matchStage = { status: 'accepted' };
 
-  // Function to search items in the exchange requests list by item title
-exports.searchItemsInExchangeRequests = asyncHandler(async (req, res) => {
-    const page = req.query.page * 1 ||1 ;
-    const limit = req.query.limit * 1||5;
-    const skip = (page - 1) * limit;
-    let matchStage = { status: 'accepted' }; // Only accepted requests
-
-    // Check if there's a search query
-    if (req.query.search) {
-        matchStage.$or = [
-            { 'requested_items.title': { $regex: req.query.search, $options: 'i' } },
-            { 'offered_items.title': { $regex: req.query.search, $options: 'i' } }
-        ];
-    }
-
-    // Aggregation pipeline to search items in the exchange requests
-    const exchangeRequests = await ExchangeRequestModel.aggregate([
-        {
-            $lookup: {
-                from: 'items', // Name of the items collection
-                localField: 'Item_requested_id', // Field from ExchangeRequestModel to join on
-                foreignField: '_id', // Field from ItemModel to join on
-                as: 'requested_items' // Name of the output array field
+        // Date range filter
+        if (req.query.rangeOption) {
+            let startDate;
+            switch (req.query.rangeOption) {
+                case '3_months':
+                    startDate = new Date();
+                    startDate.setMonth(startDate.getMonth() - 3);
+                    break;
+                case '6_months':
+                    startDate = new Date();
+                    startDate.setMonth(startDate.getMonth() - 6);
+                    break;
+                case '9_months':
+                    startDate = new Date();
+                    startDate.setMonth(startDate.getMonth() - 9);
+                    break;
+                case '12_months':
+                    startDate = new Date();
+                    startDate.setFullYear(startDate.getFullYear() - 1);
+                    break;
+                default:
+                    return res.status(400).json({ error: 'Invalid range option' });
             }
-        },
-        {
-            $lookup: {
-                from: 'items', // Name of the items collection
-                localField: 'Item_offered_id', // Field from ExchangeRequestModel to join on
-                foreignField: '_id', // Field from ItemModel to join on
-                as: 'offered_items' // Name of the output array field
-            }
-        },
-        {
-            $unwind: '$requested_items'
-        },
-        {
-            $unwind: '$offered_items'
-        },
-        {
-            $match: matchStage
-        },
-        {
-            $skip: skip
-        },
-        {
-            $limit: limit
-        },
-        {
-            $project: {
-                'request_id': 1,
-                'requested_items.title': 1, // Include only the title of requested items
-                'offered_items.title': 1 // Include only the title of offered items
-            }
-        },
-        {
-            $sort: {
-                'requested_items.created_at': -1, // Sort by creation date in descending order
-                'offered_items.created_at': -1 // Sort by creation date in descending order
-            }
+            matchStage.accepted_at = { $gte: startDate };
         }
-    ]);
 
-    res.status(200).json({ TotalItems: exchangeRequests.length, page, data: exchangeRequests });
+        // Search filter
+        if (req.query.search) {
+            matchStage.$or = [
+                { 'requested_items.title': { $regex: req.query.search, $options: 'i' } },
+                { 'offered_items.title': { $regex: req.query.search, $options: 'i' } }
+            ];
+        }
+
+        // Aggregation pipeline
+        const aggregationPipeline = [
+            {
+                $lookup: {
+                    from: 'items', // Name of the items collection
+                    localField: 'Item_requested_id', // Field from ExchangeRequestModel to join on
+                    foreignField: '_id', // Field from ItemModel to join on
+                    as: 'requested_items' // Name of the output array field
+                }
+            },
+            {
+                $lookup: {
+                    from: 'items', // Name of the items collection
+                    localField: 'Item_offered_id', // Field from ExchangeRequestModel to join on
+                    foreignField: '_id', // Field from ItemModel to join on
+                    as: 'offered_items' // Name of the output array field
+                }
+            },
+            {
+                $unwind: '$requested_items'
+            },
+            {
+                $unwind: '$offered_items'
+            },
+            {
+                $match: matchStage
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'requester_id',
+                    foreignField: '_id',
+                    as: 'requester'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'users',
+                    localField: 'requested_User_id',
+                    foreignField: '_id',
+                    as: 'requestedUser'
+                }
+            },
+            {
+                $unwind: '$requester'
+            },
+            {
+                $unwind: '$requestedUser'
+            },
+            {
+                $project: {
+                    'request_id': '$_id',
+                    'creation_date': '$created_at',
+                    'From': '$requester.username',
+                    'offered_item_name': '$offered_items.title',
+                    'To': '$requestedUser.username',
+                    'requested_item_name': '$requested_items.title'
+                }
+            },
+            {
+                $sort: {
+                    'requested_items.created_at': -1,
+                    'offered_items.created_at': -1
+                }
+            }
+        ];
+        // Execute the aggregation pipeline with pagination
+        const paginatedRequests = await ExchangeRequestModel.aggregate([
+            ...aggregationPipeline,
+            { $skip: skip },
+            { $limit: limit }
+        ]);
+
+        // Get the total count of documents matching the pipeline without pagination
+        const totalResults = await ExchangeRequestModel.aggregate([
+            ...aggregationPipeline,
+            { $count: 'total' }
+        ]);
+
+        const totalAcceptedRequests = totalResults.length > 0 ? totalResults[0].total : 0;
+
+        res.status(200).json({ TotalAcceptedRequests: totalAcceptedRequests, page, data: paginatedRequests });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
-//Search Items By Title
-exports.SearchItemsByTitle = asyncHandler(async (req, res) => {
-    const page = req.query.page * 1 ||1 ;
-    const limit = req.query.limit * 1||5;
+
+
+// Combined Get Items function to handle pagination, search, and date range filtering(POST REQUSTS PAGE)
+exports.getItems = asyncHandler(async (req, res) => {
+    const page = req.query.page * 1 || 1; // Convert string to number (query returns string)
+    const limit = req.query.limit * 1||  5;
     const skip = (page - 1) * limit;
+
     let query = { status: 'pending' }; // Ensure only pending items are retrieved
-  
+
     // Check if there's a search query
     if (req.query.search) {
         query.title = { $regex: req.query.search, $options: 'i' };
-        // 'i' option makes the search case-insensitive
     }
-  
+
+    // Check if there's a date range filter
+    if (req.query.rangeOption) {
+        let startDate;
+        switch (req.query.rangeOption) {
+            case '3_months':
+                startDate = new Date();
+                startDate.setMonth(startDate.getMonth() - 3);
+                break;
+            case '6_months':
+                startDate = new Date();
+                startDate.setMonth(startDate.getMonth() - 6);
+                break;
+            case '9_months':
+                startDate = new Date();
+                startDate.setMonth(startDate.getMonth() - 9);
+                break;
+            case '12_months':
+                startDate = new Date();
+                startDate.setFullYear(startDate.getFullYear() - 1);
+                break;
+            default:
+                return res.status(400).json({ error: 'Invalid range option' });
+        }
+        query.created_at = { $gte: startDate };
+    }
+
+    // Retrieve the filtered, paginated items and populate the user field to include the name
     const items = await ItemModel.find(query)
-    .skip(skip)
-    .limit(limit)
-    .select('-__v') // Exclude the '__v' field from the result
-    .populate('user', 'username email') // Populate the 'user' field with 'username' and 'email'
-    .sort({ createdAt: -1 }); // Sort by creation date in descending order
+        .skip(skip)
+        .limit(limit)
+        .populate('user', 'username email')
+        .sort({ createdAt: -1 });
 
-res.status(200).json({ TotalItems: items.length, page, data: items });
+    // Get the total count of matching documents
+    const totalMatchingItems = await ItemModel.countDocuments(query);
+
+    res.status(200).json({
+        TotalItems: totalMatchingItems,
+        page,
+        data: items
+    });
 });
 
 
-//Search Categories By Name
-exports.SearchCategoriesByName = asyncHandler(async (req, res) => {
-    const page = req.query.page * 1 ||1 ;
-    const limit = req.query.limit * 1||5;
-    const skip = (page - 1) * limit;
-    let query = {};
-  
-    // Check if there's a search query
-    if (req.query.search) {
-        query = { name: { $regex: req.query.search, $options: 'i' } };
-        // 'i' option makes the search case-insensitive
+// Combined function to list all users and search users by name(CUSTOMERS PAGE)
+exports.getAllUsers = asyncHandler(async (req, res) => {
+    // Extract token from request headers
+    const token = req.headers.token;
+
+    if (!token) {
+        return res.status(401).json({ message: 'Authorization token is missing.' });
     }
-  
-    const categories = await CategoryModel.find(query)
-        .skip(skip)
-        .limit(limit)
-        .select('-__v') // Exclude the '__v' field from the result
-        .populate('user', 'username email') // Populate the 'user' field with 'username' and 'email'
-        .sort({ createdAt: -1 }); // Sort by creation date in descending order
-  
-    res.status(200).json({ TotalCategories: categories.length, page, data: categories });
-  });
 
-//Search The Customers By Name
-exports.SearchUsersByName = asyncHandler(async (req, res) => {
-    const page = req.query.page * 1 ||1 ;
-    const limit = req.query.limit * 1||5;
-    const skip = (page - 1) * limit;
-    let query = {};
-  
-    // Check if there's a search query
-    if (req.query.search) {
-        query = { username: { $regex: req.query.search, $options: 'i' } };
-        // 'i' option makes the search case-insensitive
-    }
-  
-    const users = await UserModel.find(query)
-        .skip(skip)
-        .limit(limit)
-        .select('-__v -password') // Exclude the '__v' and 'password' fields from the result
-        .sort({ createdAt: -1 }); // Sort by creation date in descending order
-  
-    res.status(200).json({ TotalUsers: users.length, page, data: users });
-  });
-
-
-
-
-// Fliter accepted requests by dATE RANGE
-  exports.filterAcceptedRequestsByDateRange = asyncHandler(async (req, res) => {
     try {
-        const { rangeOption } = req.body;
-        let startDate;
-
-        // Calculate the start date based on the selected option
-        switch (rangeOption) {
-            case '3_months':
-                startDate = new Date();
-                startDate.setMonth(startDate.getMonth() - 3);
-                break;
-            case '6_months':
-                startDate = new Date();
-                startDate.setMonth(startDate.getMonth() - 6);
-                break;
-            case '9_months':
-                startDate = new Date();
-                startDate.setMonth(startDate.getMonth() - 9);
-                break;
-            case '12_months':
-                startDate = new Date();
-                startDate.setFullYear(startDate.getFullYear() - 1);
-                break;
-            default:
-                return res.status(400).json({ error: 'Invalid range option' });
+        // Verify the token
+        const decoded = jwt.verify(token, 'your_secret_key'); // Replace 'your_secret_key' with your actual JWT secret
+        const userId = decoded.userId;
+        const user = await UserModel.findById(userId);
+        
+        // Check if the decoded token contains the role
+        if (user.role !== 'admin') {
+            return res.status(403).json({ message: 'Unauthorized access. Only admins can access this resource.' });
         }
 
-        // Query the ExchangeRequestModel for accepted requests within the specified date range
-        const acceptedRequests = await ExchangeRequestModel.find({
-            status: 'accepted',
-            accepted_at: { $gte: startDate }
-        });
+        // Pagination parameters
+        const page = req.query.page * 1 || 1;
+        const limit = req.query.limit * 1 || 10;
+        const skip = (page - 1) * limit;
 
-        res.status(200).json({ data: acceptedRequests });
+        // Create query object for search
+        let query = {};
+
+        // Check if there's a search query
+        if (req.query.search) {
+            query.username = { $regex: req.query.search, $options: 'i' }; // Case-insensitive search by username
+        }
+
+        // Retrieve the total count of matching users
+        const totalUsersCount = await UserModel.countDocuments(query);
+
+        // Check if requested page is out of range
+        const totalPages = Math.ceil(totalUsersCount / limit);
+        if (page > totalPages && totalUsersCount > 0) {
+            return res.status(404).json({ message: 'Page out of range. There are no users on this page.' });
+        }
+
+        // Retrieve the matching users with pagination
+        const users = await UserModel.find(query)
+            .skip(skip)
+            .limit(limit)
+            .select('-__v -password') // Exclude the '__v' and 'password' fields from the result
+            .sort({ createdAt: -1 }); // Sort by creation date in descending order
+
+        // Return the response
+        res.status(200).json({ totalUsers: totalUsersCount, totalPages, currentPage: page, data: users });
     } catch (error) {
         console.log(error);
-        res.status(500).json({ error: error.message });
+        return res.status(401).json({ error: error.message });
     }
 });
 
-// FILTER PENDING ITEMS BY DATE RANGE
-exports.filterPendingItemsByDateRange = asyncHandler(async (req, res) => {
-    try {
-        const { rangeOption } = req.body;
-        let startDate;
 
-        // Calculate the start date based on the selected option
-        switch (rangeOption) {
-            case '3_months':
-                startDate = new Date();
-                startDate.setMonth(startDate.getMonth() - 3);
-                break;
-            case '6_months':
-                startDate = new Date();
-                startDate.setMonth(startDate.getMonth() - 6);
-                break;
-            case '9_months':
-                startDate = new Date();
-                startDate.setMonth(startDate.getMonth() - 9);
-                break;
-            case '12_months':
-                startDate = new Date();
-                startDate.setFullYear(startDate.getFullYear() - 1);
-                break;
-            default:
-                return res.status(400).json({ error: 'Invalid range option' });
+
+// Combined function to list all Categories and search Categories by name
+exports.listCategoriesWithItemsCount = asyncHandler(async (req, res) => {
+    try {
+        // Pagination parameters
+        const page = req.query.page * 1 || 1;
+        const limit = req.query.limit * 1 || 5;
+        const skip = (page - 1) * limit;
+        
+        // Create query object for search
+        let query = {};
+
+        // Check if there's a search query
+        if (req.query.search) {
+            query.name = { $regex: req.query.search, $options: 'i' }; // Case-insensitive search by name
         }
 
-        // Find pending items created within the specified date range
-        const pendingItems = await ItemModel.find({
-            status: 'pending',
-            created_at: { $gte: startDate }
-        });
+        // Retrieve the total count of matching categories
+        const totalCategoriesCount = await CategoryModel.countDocuments(query);
 
-        res.status(200).json({ data: pendingItems });
+        // Retrieve the matching categories with pagination
+        const categories = await CategoryModel.find(query)
+            .skip(skip)
+            .limit(limit)
+            .sort({ createdAt: -1 }); // Sort by creation date in descending order
+
+        // Prepare the result array
+        const result = [];
+
+        // Loop through each category and get the item count
+        for (const category of categories) {
+            const itemCount = await ItemModel.countDocuments({ category: category._id });
+
+            // Format the creation date
+            const createdAt = category.createdAt.toLocaleDateString('en-US', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric'
+            });
+
+            // Add category details to the result array
+            result.push({
+                id: category._id,
+                name: category.name,
+                itemCount: itemCount,
+                createdAt: createdAt
+            });
+        }
+
+        // Send the result
+        res.status(200).json({
+            success: true,
+            totalCategories: totalCategoriesCount,
+            page,
+            data: result
+        });
     } catch (error) {
-        console.log(error);
-        res.status(500).json({ error: error.message });
+        // Handle errors
+        console.error(error);
+        res.status(500).json({ success: false, message: error.message });
     }
 });

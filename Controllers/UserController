@@ -337,3 +337,129 @@ exports.getItemsbyUsertoken = asyncHandler(async (req, res) => {
         return res.status(401).json({ msg: error.message });
     }
 });
+
+
+
+//This function is responsible for sending the password reset email to the user.
+
+async function sendPasswordResetEmail(email, token) {
+    const transporter = nodemailer.createTransport({
+        host: process.env.Email_HOST,
+        port: process.env.Email_PORT,
+        auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS
+        }
+    });
+
+    const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: 'Password Reset',
+        html: `<div style="font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; font-size: 16px; color: #333;">
+            <h2>Password Reset Request</h2>
+            <p>To reset your password, please click on the link below:</p>
+            <a href="http://localhost:4000/forget-password/reset-password?token=${token}" style="color: #0066cc;">Reset Password</a>
+            <p>This link will expire in 1 hour.</p>
+            <p>If you did not request a password reset, please ignore this email.</p>
+            </div>`,
+    };
+
+    return new Promise((resolve, reject) => {
+        transporter.sendMail(mailOptions, (error, info) => {
+            if (error) {
+                console.error(error);
+                reject('Failed to send email');
+            } else {
+                resolve('Email sent successfully');
+            }
+        });
+    });
+}
+/*This forgetPassword function orchestrates the process of generating the reset token,
+ saving it to the user document, and triggering the email sending process.*/
+
+ exports.forgetPassword = async (req, res) => {
+    const { email } = req.body;
+
+    if (!email) {
+        return res.status(400).send('An email is required');
+    }
+
+    try {
+        const user = await User.findOne({ email });
+        
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Generate token with expiry
+        const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+        
+        // Calculate token expiry
+        const tokenExpiry = Date.now() + 3600000; // 1 hour in milliseconds
+        
+        // Save token and expiry to user document
+        user.token = token;
+        user.tokenExpiry = tokenExpiry;
+        await user.save();
+
+        await sendPasswordResetEmail(email, token);
+
+        // Include token and tokenExpiry in the response
+        res.status(200).json({ 
+            message: 'Email sent successfully', 
+            token,
+            tokenExpiry
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'An error occurred during the operation' });
+    }
+};
+
+
+
+/*function ensures that the password reset token is valid, hashes the new password,
+ updates the user's password in the database,
+ and sends an appropriate response to the client indicating the outcome of the password reset operation*/
+
+ exports.resetPassword = async (req, res) => {
+    const { token, newPassword } = req.body;
+
+    try {
+        const user = await User.findOne({ token });
+
+        if (!user) {
+            return res.status(401).json({ error: 'Invalid token' });
+        }
+
+        // Verify token
+        jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
+            if (err) {
+                console.error("Token verification failed:", err.message);
+                return res.status(401).json({ error: 'Invalid token' });
+            }
+
+            try {
+                const hashedPassword = await bcrypt.hash(newPassword, 10);
+                user.password = hashedPassword;
+
+                // Generate new token without expiration
+                const newToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
+
+                // Update user with new token
+                user.token = newToken;
+                await user.save();
+
+                res.status(200).json({ message: 'Password updated successfully', token: newToken });
+            } catch (error) {
+                console.error("Error updating password:", error);
+                res.status(500).json({ error: 'An error occurred while updating the password' });
+            }
+        });
+    } catch (error) {
+        console.error("Error finding user:", error);
+        res.status(500).json({ error: 'An error occurred while updating the password' });
+    }
+};

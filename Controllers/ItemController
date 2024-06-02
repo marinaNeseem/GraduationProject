@@ -9,6 +9,7 @@ const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const { populate } = require('../modules/ItemModel');
 const ItemModel = require('../modules/ItemModel');
+const ExchangeRequestModel = require('../modules/RequestModel');
 
 
 //Create item
@@ -77,39 +78,61 @@ exports.createItem = asyncHandler(async (req, res) => {
   });
 });
 
-
-
-
- //Get all items
+// Get all items(accepted Items ) & exclude the items of logged User
 exports.getItems = asyncHandler(async (req, res) => {
-  //req from user as params (pages, limit)
-  const page = req.query.page * 1 || 1; // to convert string to number(query returns string)
-  const limit = req.query.limit * 1 || 5;
-  const skip = (page - 1) * limit;
-  const items = await itemModel.find({})
+  // Extract token from request headers
+  const token = req.headers.token;
+
+  // Check if token exists
+  if (!token) {
+    return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
+  }
+
+  try {
+    // Verify token
+    const decoded = jwt.verify(token, 'your_secret_key');
+    const userId = decoded.userId;
+
+    // req from user as params (pages, limit)
+    const page = req.query.page * 1 || 1; // to convert string to number(query returns string)
+    const limit = req.query.limit * 1 || 5;
+    const skip = (page - 1) * limit;
+
+    // Modify the query to filter for accepted items only and exclude items from the logged-in user
+    const items = await ItemModel.find({ status: 'accepted', user: { $ne: userId } })
       .skip(skip)
       .limit(limit)
       .populate('category', '_id name'); // Populate the 'category' field and retrieve both '_id' and 'name'
 
-  const formattedItems = items.map(item => ({
+    const formattedItems = items.map(item => ({
       _id: item._id,
       title: item.title,
       description: item.description,
       price: item.price,
-      Category: {
-          _id: item.category._id, // Retrieve category ID
-          name: item.category.name // Retrieve category name
+      category: {
+        _id: item.category._id, // Retrieve category ID
+        name: item.category.name // Retrieve category name
       },
       user: item.user,
       condition: item.condition,
       slug: item.slug,
       image: item.image,
       status: item.status,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt
-  }));
+      createdAt: item.created_at,
+      updatedAt: item.updated_at
+    }));
 
-  res.status(200).json({ TotalItems: items.length, page, data: formattedItems });
+    res.status(200).json({ TotalItems: items.length, page, data: formattedItems });
+
+  } catch (error) {
+    // Handle JWT errors
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ success: false, message: 'Unauthorized: Invalid token' });
+    }
+
+    console.log(error);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
 });
 
 
@@ -190,14 +213,17 @@ exports.updateitem = asyncHandler(async (req, res) => {
       return res.status(401).json({ success: false,msg: 'Unauthorized: Invalid token' });
   }
 });
-// delete spicific item
+
+
+
+// Delete specific item
 exports.deleteitem = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { token } = req.headers;
 
   // Check if token exists
   if (!token) {
-      return res.status(401).json({ success: false,msg: 'Unauthorized: No token provided' });
+      return res.status(401).json({ success: false, msg: 'Unauthorized: No token provided' });
   }
 
   try {
@@ -206,27 +232,46 @@ exports.deleteitem = asyncHandler(async (req, res) => {
       const userId = decoded.userId;
 
       // Retrieve the item from the database
-      const itemToDelete = await itemModel.findById(id);
+      const itemToDelete = await ItemModel.findById(id);
 
       // Check if the item exists
       if (!itemToDelete) {
-          return res.status(404).json({success: false, msg: `No item found for this id: ${id}` });
+          return res.status(404).json({ success: false, msg: `No item found for this id: ${id}` });
       }
 
       // Check if the user is authorized to delete the item
       if (itemToDelete.user.toString() !== userId) {
-          return res.status(403).json({ success: false , msg: 'You are not authorized to delete this item' });
+          return res.status(403).json({ success: false, msg: 'You are not authorized to delete this item' });
       }
 
       // Delete the item
-      await itemModel.findByIdAndDelete(id);
+      await ItemModel.findByIdAndDelete(id);
 
-      res.status(200).json({success: true , msg: `The item with ID ${id} was successfully deleted` });
+      // Remove the item from the favorites array of all users
+      await UserModel.updateMany(
+        { favorites: id },
+        { $pull: { favorites: id } }
+      );
+
+      // Delete all exchange requests related to this item
+      await ExchangeRequestModel.deleteMany({
+        $or: [
+          { Item_offered_id: id },
+          { Item_requested_id: id }
+        ]
+      });
+
+      res.status(200).json({ success: true, msg: `The item with ID ${id} was successfully deleted` });
   } catch (error) {
       console.error('Error deleting item:', error);
-      return res.status(500).json({success: false , msg: 'Internal server error' });
+      return res.status(500).json({ success: false, msg: 'Internal Server Error' });
   }
 });
+
+
+
+
+
 
 
 
