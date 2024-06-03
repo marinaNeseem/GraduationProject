@@ -6,6 +6,7 @@ const ItemModel = require('../modules/ItemModel');
 const asyncHandler = require('express-async-handler');
 const UserModel = require('../modules/UserModel');
 const mongoose = require('mongoose');
+const cron = require('node-cron');
 
 // list all items of the user by their ID from the token
 exports.listOfferedItems = asyncHandler(async (req, res) => {
@@ -180,3 +181,46 @@ exports.respondToExchangeRequest = asyncHandler(async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+
+
+
+// Schedule a task to run every 10 minutes
+
+//cron.schedule('*/10 * * * *', async () => {
+   /* try {
+        console.log('Cron job running...');
+
+        // Find all accepted exchange requests with accepted_at populated
+        const acceptedRequests = await ExchangeRequestModel.find({ status: 'accepted', accepted_at: { $exists: true } });
+
+        // Iterate through each accepted request
+        for (const request of acceptedRequests) {
+            // Calculate the difference in milliseconds between the current time and the time the request was accepted
+            const currentTime = new Date();
+            const acceptedTime = request.accepted_at;
+            const millisecondsInAWeek = 7 * 24 * 60 * 60 * 1000; // One week in milliseconds
+            const millisecondsDiff = currentTime - acceptedTime;
+
+            // If the difference is more than one week, delete the items associated with the request
+            if (millisecondsDiff > millisecondsInAWeek) {
+                // Count the number of expired items
+                const expiredItemsCount = await ItemModel.countDocuments({ _id: { $in: [request.Item_offered_id, request.Item_requested_id] } });
+
+                // Delete the expired items only if there are any
+                if (expiredItemsCount > 0) {
+                    // Delete the expired items
+                    await ItemModel.deleteMany({ _id: { $in: [request.Item_offered_id, request.Item_requested_id] } });
+                
+                    // Print the message only if items were deleted
+                    console.log('Expired items deleted successfully.');
+                } else {
+                    console.log('No expired items found.');
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error deleting expired items:', error);
+    }
+});
+*/

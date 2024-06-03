@@ -326,6 +326,45 @@ exports.addToSavedItems = asyncHandler(async (req, res) => {
 
   
 
+// REMOVE ITEM FROM SAVED ITEMS
+exports.removeFromSavedItems = asyncHandler(async (req, res) => {
+  try {
+    const itemId = req.params.itemId; // Extract itemId from request parameters
+    const token = req.headers.token; // Extract token from request headers
+
+    // Check if both item ID and token are provided
+    if (!itemId || !token) {
+      return res.status(400).json({ error: 'Item ID and token are required' });
+    }
+
+    // Verify token
+    const decoded = jwt.verify(token, 'your_secret_key');
+    const userId = decoded.userId;
+
+    // Check if the user exists
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check if the item exists in user's favorites
+    if (!user.favorites.includes(itemId)) {
+      return res.status(400).json({ error: 'Item not found in favorites' });
+    }
+
+    // Remove the item from user's favorites
+    user.favorites = user.favorites.filter(favoriteId => favoriteId.toString() !== itemId);
+    await user.save();
+
+    res.status(200).json({ message: 'Item removed from favorites successfully' });
+  } catch (error) {
+    console.error('Error removing item from favorites:', error);
+    res.status(500).json({ error: 'Failed to remove item from favorites' });
+  }
+});
+
+
+
 
 
 // List all saved items of a user
@@ -364,30 +403,6 @@ exports.listSavedItems = asyncHandler(async (req, res) => {
   }
 });
 
-
-
-//search
-
-
-
-exports.search = asyncHandler(async (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 5;
-  const skip = (page - 1) * limit;
-
-  
-  const search = {};
-  if (req.query.search) {
-    search.title = { $regex: req.query.search, $options: 'i' }; // Case-insensitive partial match
-  }
-
-  const item = await itemModel.find(search)
-  .skip(skip)
-  .limit(limit)
-  .populate({ path: 'category' , select :"name" });
-
-  res.status(200).json({ page, limit, results: item.length, data: item });
-});
 
 
 
@@ -461,3 +476,80 @@ exports.GetUserAcceptedItems = asyncHandler(async (req, res) => {
         data: formattedItems
     });
 });
+
+
+
+//SEARCH BY ITEM NAME
+exports.SearchItemsByTitle = asyncHandler(async (req, res) => {
+  const page = req.query.page * 1 || 1;
+  const limit = req.query.limit * 1||  5;
+  const skip = (page - 1) * limit;
+  let query = {};
+
+  // Check if there's a search query
+  if (req.query.search) {
+      query = { title: { $regex: req.query.search, $options: 'i' } };
+      // 'i' option makes the search case-insensitive
+  }
+
+  // Check if there's a category query
+  if (req.query.category) {
+    query.category = req.query.category; // Filter by category
+  }
+  const items = await ItemModel.find(query)
+      .skip(skip)
+      .limit(limit)
+      .select('-__v') // Exclude the '__v' field from the result
+      .populate('user', 'username email') // Populate the 'user' field with 'username' and 'email'
+      .sort({ createdAt: -1 }); // Sort by creation date in descending order
+
+  res.status(200).json({ TotalItems: items.length, page, data: items });
+});
+
+
+// Filter items by its condition
+exports.filterItemsByCondition = async (req, res) => {
+  const { condition } = req.query;
+
+  if (condition === undefined) {
+      return res.status(400).json({ error: 'Condition query parameter is required' });
+  }
+
+  // Convert the condition query parameter to a boolean
+  let conditionBool;
+  if (condition.toLowerCase() === 'true'  ||condition === '1' || condition.toLowerCase() === 'new') {
+      conditionBool = true;
+  } else if (condition.toLowerCase() === 'false' || condition === '0'  ||condition.toLowerCase() === 'used') {
+      conditionBool = false;
+  } else {
+      return res.status(400).json({ error: 'Invalid condition query parameter' });
+  }
+
+  try {
+      const items = await ItemModel.find({ condition: conditionBool });
+      res.status(200).json(items);
+  } catch (error) {
+      console.error('Error filtering items by condition:', error);
+      res.status(500).json({ error: 'An error occurred while filtering items by condition' });
+  }
+};
+
+// Get all expired items for a user based on their token
+exports.getExpiredItemsForUser = asyncHandler(async (req, res) => {
+  try {
+      // Extract user ID from token
+      const token = req.headers.token;
+      const decoded = jwt.verify(token, 'your_secret_key');
+      const userId = decoded.userId;
+
+      // Find all items associated with the user that have the status set to 'expired'
+      const expiredItems = await ItemModel.find({ user: userId, status: 'expired' });
+
+      res.status(200).json({ success: true, data: expiredItems });
+  } catch (error) {
+      console.log(error);
+      res.status(500).json({ error: error.message });
+  }
+});
+
+
