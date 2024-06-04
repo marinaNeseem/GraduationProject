@@ -1,26 +1,28 @@
 const mongoose = require('mongoose');
 
-const chatMessageSchema = new mongoose.Schema({
-  messages: [
-    {
-      text: {
-        type: String,
-        required: true
-      },
-      sender: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
-      },
-      Date: {
-        type:Date,
-        default: Date.now,
-        required:true
+const messageSchema = new mongoose.Schema({
+  text: {
+    type: String,
+  },
+  photo: {
+    url: String,
+    public_id: String
+  },
+  sender: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  date: {
+    type: Date,
+    default: Date.now,
+    required: true
+  },
+  time: String,
+}, { _id: false }); // Use { _id: false } to avoid creating a separate _id field for each message
 
-      },
-      time: String,
-    }
-  ],
+const chatMessageSchema = new mongoose.Schema({
+  messages: [messageSchema],
   users: [
     {
       type: mongoose.Schema.Types.ObjectId,
@@ -28,7 +30,6 @@ const chatMessageSchema = new mongoose.Schema({
       required: true
     }
   ],
- 
 }, { timestamps: true });
 
 const ChatMessage = mongoose.model('ChatMessage', chatMessageSchema);

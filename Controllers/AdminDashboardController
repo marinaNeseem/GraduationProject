@@ -9,6 +9,7 @@ const multer = require('multer');
 const bcrypt = require('bcrypt');
 const mongoose = require('mongoose');
 const moment = require('moment');
+const cloudinary = require('../util/Cloudinary.js');
 
 //login for admin Dashboard
 
@@ -37,6 +38,92 @@ exports.loginAdmin = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+
+
+
+
+
+//Upload Admin Photo
+  // Configure multer for file upload
+  const storage = multer.memoryStorage(); // Use memory storage for simplicity
+  const upload = multer({ storage: storage });
+   // Middleware to handle file upload
+  const uploadMiddleware = upload.single('image');
+
+//Upload Admin Photo
+
+
+
+
+//Upload Admin Photo
+  
+  
+exports.UploadAdminPhoto = [uploadMiddleware, asyncHandler(async (req, res) => {
+    const token = req.headers.token;
+  
+    // Check if token exists
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
+    }
+  
+    try {
+      // Verify token
+      const decoded = jwt.verify(token, 'your_secret_key');
+      const userId = decoded.userId;
+  
+      const user = await UserModel.findById(userId);
+      if (!user) {
+        return res.status(404).json({ success: false, msg:` No user found for this id ${userId} `});
+      }
+  
+      // Check if file is uploaded
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'Image file is required' });
+      }
+  
+      // Upload image to Cloudinary
+      const result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream({ folder: "customers" }, (error, result) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(result);
+          }
+        });
+  
+        stream.end(req.file.buffer);
+      });
+  
+      // Update user's photo
+      user.image = {
+        public_id: result.public_id,
+        url: result.secure_url
+      };
+      await user.save();
+  
+      // Reformat the response data
+      const responseData = {
+        username: user.username,
+        email: user.email,
+        phone: user.phone,
+        image: user.image, // Include the updated image
+        role: user.role
+      };
+  
+      res.status(200).json({ success: true, responseData });
+    } catch (error) {
+      console.log(error);
+      res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+  })];
+
+
+
+
+
+
+
 
 
 
@@ -183,6 +270,9 @@ exports.getAllUsers = asyncHandler(async (req, res) => {
         return res.status(500).json({ success: false, msg: 'Internal server error' });
     }
 });
+
+
+
   
   //// List user information based on his id with(number of posts and requests)
 exports.getUserInfoByIdWithNPostsRequests = asyncHandler(async (req, res) => {
@@ -343,12 +433,12 @@ exports.listExchangedItemsDetails = asyncHandler(async (req, res) => {
             offered_item: {
                 title: offeredItemDetails.title,
                 price: offeredItemDetails.price,
-                Descreption: offeredItemDetails.Descreption,
+                Description: offeredItemDetails.Description,
             },
             requested_item: {
                 title: requestedItemDetails.title,
                 price: requestedItemDetails.price,
-                Descreption: requestedItemDetails.Descreption,
+                Description: requestedItemDetails.Description,
             }
         };
 
@@ -493,70 +583,77 @@ exports.deleteCategory = async (req, res) => {
 
 
 
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'uploads/'); // Save the uploaded files to the 'uploads' directory
-    },
-    filename: function (req, file, cb) {
-        cb(null, file.fieldname + '-' + Date.now() + '.' + file.originalname.split('.').pop());
+
+
+
+
+exports.createCategory = [uploadMiddleware, asyncHandler(async (req, res) => {
+    const { name } = req.body;
+    const token = req.headers.token;
+  
+    // Check if token exists
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
     }
-  });
   
-  const upload = multer({ storage: storage });
-
-
-
-// ADMIN ADD NEW Category******
-exports.createCategory = asyncHandler(async(req, res) => {
-    upload.single('image')(req, res, async (err) => {
-      if (err) {
-          console.log(err);
-          return res.status(400).json({ success: false, message: "Error uploading image" });
-      }
-    
-      const name = req.body.name;
-      const token = req.headers.token;
-      
-      // Check if there is a token provided in the header or not
-      if (!token) {
-        return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
-      }
+    // Check if the category name ends with "category"
+    if (!name.toLowerCase().endsWith('category')) {
+      return res.status(400).json({ success: false, message: 'Category name must end with the word "category"' });
+    }
   
-       // Check if the category name ends with "category"
-       if (!name.toLowerCase().endsWith('category')) {
-        return res.status(400).json({ success: false, message: 'Category name must end with the word "category"' });
-      }
+    try {
+      // Verify token
       const decoded = jwt.verify(token, 'your_secret_key');
       const userId = decoded.userId;
   
-          // Construct the complete URL for the image
-          const imageUrl = req.file ?` ${req.protocol}://${req.get('host')}/${req.file.path}` : null;
-
-      try {
-        const category = await CategoryModel.create({
-          name,
-          slug: slugify(name),
-          user: userId,
-          image: imageUrl
-        });
-        res.status(200).json({ success: true, data: category });
-      } catch (error) {
-        // Check if the error is a validation error for the 'image' field
-        if (error.errors && error.errors.image) {
-          return res.status(400).json({ success: false, message: 'Image is Required' });
-        }
-        if(error.message.includes('duplicate key')){
-  
-          return res.status(400).json({success:false,message:'category name is already exist'});
-        }else{
-        // If it's not a validation error for the 'image' field, return the generic error message
-        res.status(500).json({ success: false, message: 'Internal Server Error' });
-        console.log(error);}
+      // Check if file is uploaded
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'Image file is required' });
       }
-    });
-  });
-
   
+      // Upload image to Cloudinary
+      const result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream({ folder: "Categories" }, (error, result) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(result);
+          }
+        });
+  
+        stream.end(req.file.buffer);
+      });
+  
+      // Create new category
+      const category = await CategoryModel.create({
+        name,
+        slug: slugify(name),
+        user: userId,
+        image: {
+          public_id: result.public_id,
+          url: result.secure_url
+        }
+      });
+  
+      res.status(201).json({ success: true, data: category });
+    } catch (error) {
+      // Handle Mongoose validation errors
+      if (error instanceof mongoose.Error.ValidationError) {
+        const errors = Object.values(error.errors).map((val) => val.message);
+        return res.status(400).json({ success: false, message: errors });
+      }
+      if (error.message.includes('duplicate key')) {
+        return res.status(400).json({ success: false, message: 'Category name already exists' });
+      }
+  
+      console.log(error);
+      res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+  })];
+
+
+
+
 
 //update itemstatus
 exports.updateItemStatus = asyncHandler(async (req, res) => {
@@ -689,81 +786,9 @@ exports.updateAdminInfo = asyncHandler(async (req, res) => {
 
 
 
-//upload Admin photo after registration
-//Upload Admin Photo
-const storagee = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'uploadsUsers/'); // Save the uploaded files to the 'uploads' directory
-    },
-    filename: function (req, file, cb) {
-        cb(null, file.fieldname + '-' + Date.now() + '.' + file.originalname.split('.').pop());
-    }
-  });
-  const uploadsUsers = multer({ storage: storagee });
-  
-  exports.UploadAdminPhoto = asyncHandler(async (req, res) => {
 
 
 
-
-
-
-
-
-
-
-    uploadsUsers.single('image')(req, res, async (err) => {
-      if (err) {
-        console.log(err);
-        return res.status(400).json({ success: false, message: "Error uploading image" });
-      }
-  
-      // Extract token from request headers
-      const token = req.headers.token;
-  
-      // Check if token exists
-      if (!token) {
-        return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
-      }
-  
-      try {
-        // Verify token
-        const decoded = jwt.verify(token, 'your_secret_key');
-        const userId = decoded.userId;
-  
-        const user = await UserModel.findById(userId);
-        if (!user) {
-          return res.status(404).json({ success: false, msg: `No user found for this id ${userId}` });
-        }else{
-  
-        // Update user's photo
-        const imageUrl = req.file ?` ${req.protocol}://${req.get('host')}/${req.file.path}` : null;
-        user.image=imageUrl;
-        await user.save();
-
- // Reformat the response data
- const responseData = {
-   
-    username: user.username,
-    email: user.email,
-    phone: user.phone,
-    image: user.image, // Include the updated image
-    role: user.role,
-   
-};
-
-
-
-  
-        res.status(200).json({ success: true, responseData });
-    }
-      } catch (error) {
-        console.log(error);
-        res.status(500).json({ success: false, message: 'Internal Server Error' });
-      }
-    });
-  });
-  
 
 //List Accepted Requests with Item's Search And filter by date range(transactions page)
 exports.listAcceptedExchangeRequests = asyncHandler(async (req, res) => {

@@ -3,12 +3,13 @@ const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const UserModel = require('../modules/UserModel');
 const { emitMessage } = require('../Controllers/SocketIoController');
+const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
+const asyncHandler = require('express-async-handler');
+
+
+
 //send mess
-
-
-
-
-
 exports.AddMessasege = async (req, res) => {
   try {
     // Extract token from request headers
@@ -38,7 +39,7 @@ exports.AddMessasege = async (req, res) => {
         time: formattedTime, // Provide the time field for the chat room
         messages: [{ text: Message, sender: from, Date: currentTime, time: formattedTime }] // Add message to the new chat room
       });
-      emitMessage(Message, from, currentTime);
+      //emitMessage(Message, from, currentTime);
       return res.status(200).json({ msg: "Message added to a new chat room" });
     }
   } catch (error) {
@@ -53,8 +54,91 @@ exports.AddMessasege = async (req, res) => {
   }
 };
 
-/*
-//list all chat mess
+
+
+const memoryStorage = multer.memoryStorage();
+const upload = multer({ storage: memoryStorage });
+
+// Middleware to handle file upload
+const uploadMiddleware = upload.single('image');
+
+
+
+exports.sendPhotoMessage = [uploadMiddleware, asyncHandler(async (req, res) => {
+  const token = req.headers.token;
+
+  // Check if token exists
+  if (!token) {
+    return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
+  }
+
+  try {
+    // Verify token
+    const decoded = jwt.verify(token, 'your_secret_key');
+    const senderId = decoded.userId;
+    const { recipientId, chatId } = req.body;
+
+    // Check if sender exists
+    const sender = await UserModel.findById(senderId);
+    if (!sender) {
+      return res.status(404).json({ success: false, message: `No user found for this id ${senderId}` });
+    }
+
+    // Check if recipient exists
+    const recipient = await UserModel.findById(recipientId);
+    if (!recipient) {
+      return res.status(404).json({ success: false, message: `No user found for this id ${recipientId}` });
+    }
+
+    // Check if file is uploaded
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Image file is required' });
+    }
+
+    // Upload image to Cloudinary
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream({ folder: "Chat_Images" }, (error, result) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(result);
+        }
+      });
+
+      stream.end(req.file.buffer);
+    });
+
+    // Find or create chat between users
+    let chat = await chatModel.findById(chatId);
+    if (!chat) {
+      chat = new chatMessage({
+        users: [senderId, recipientId],
+        messages: []
+      });
+    }
+
+    // Add the photo message to the chat
+    const newMessage = {
+      photo: {
+        url: result.secure_url,
+        public_id: result.public_id
+      },
+      sender: senderId,
+      time: new Date().toLocaleTimeString()
+    };
+
+    chat.messages.push(newMessage);
+    await chat.save();
+
+    res.status(200).json({ success: true, data: chat });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
+})];
+
+
+
 exports.getAllMessage = async (req, res) => {
   try {
     const { from, to } = req.params;
@@ -62,12 +146,24 @@ exports.getAllMessage = async (req, res) => {
       users: { $all: [from, to] }
     }).sort({ updatedAt: 1 }).populate({
       path: 'messages.sender',
-      select: '_id' 
-    }).select('messages.text messages.sender messages.Date messages.time');
+      select: '_id'
+    }).select('messages.text messages.photo messages.sender messages.date messages.time');
 
     const ChatMessages = messages.map((msg) => {
       const fromSelf = msg.sender && msg.sender.toString() === from;
-      return { fromSelf, messages: msg.messages };
+      return {
+        fromSelf,
+        messages: msg.messages.map(m => ({
+          text: m.text || null,
+          photo: m.photo && m.photo.url ? {
+            url: m.photo.url,
+            public_id: m.photo.public_id
+          } : null,
+          sender: m.sender._id,
+          date: m.date,
+          time: m.time
+        }))
+      };
     });
 
     res.status(200).json(ChatMessages);
@@ -81,34 +177,11 @@ exports.getAllMessage = async (req, res) => {
     res.status(500).json({ success: false, message: 'Internal Server Error' });
   }
 };
-*/
-exports.getAllMessage = async (req, res) => {
-  try {
-    const { from, to } = req.params;
-    const messages = await chatModel.find({
-      users: { $all: [from, to] }
-    }).sort({ updatedAt: 1 }).populate({
-      path: 'messages.sender',
-      select: '_id' 
-    }).select('messages.text messages.sender messages.Date messages.time');
 
-    const ChatMessages = messages.map((msg) => {
-      const fromSelf = msg.sender && msg.sender.toString() === from;
-      // Modify the sender property to only include the sender's ID
-      return { fromSelf, messages: msg.messages.map(m => ({ text: m.text, sender: m.sender._id, Date: m.Date, time: m.time })) };
-    });
 
-    res.status(200).json(ChatMessages);
-  } catch (error) {
-    if (error instanceof mongoose.Error.ValidationError) {
-      const errors = Object.values(error.errors).map((val) => val.message);
-      return res.status(400).json({ success: false, message: errors });
-    }
 
-    console.error(error);
-    res.status(500).json({ success: false, message: 'Internal Server Error' });
-  }
-};
+
+
 
 
 
@@ -158,43 +231,3 @@ exports.getAllChats = async (req, res) => {
   }
 };
 
-
-/*
-//list all user's chats
-exports.getAllChats = async (req, res) => {
-  try {
-    // Extract token from request headers
-    const token = req.headers.token;
-    if (!token) {
-      return res.status(400).json({ success: false, message: "Token not provided" });
-    }
-    
-    // Decode the token to get the user ID
-    const decoded = jwt.verify(token, 'your_secret_key');
-    const userId = decoded.userId;
-
-    // Find all chat rooms where the user is involved
-    const chatRooms = await chatModel.find({
-      users: userId
-    }).populate({
-      path: 'users',
-      select: 'username _id' // Select both username and _id
-    });
-
-    // Extract necessary information from each chat room
-    const chats = chatRooms.map((room) => {
-      const otherUsers = room.users.filter(user => user._id.toString() !== userId); // Exclude the current user from the list of users in the chat
-      return {
-        chatId: room._id,
-        users: otherUsers.map(user => ({ userId: user._id, username: user.username })), // Extract user IDs and usernames
-        lastMessage: room.messages.length > 0 ? room.messages[room.messages.length - 1] : null // Get the last message in the chat, if any
-      };
-    });
-
-    res.status(200).json({ success: true, chats });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: 'Internal Server Error' });
-  }
-};
-*/

@@ -50,9 +50,17 @@ const userSchema = new mongoose.Schema({
     token: {
         type: String
     },
-    image:{
-        type:String,
+    
+image: {
+    public_id: {
+        type: String
+        
     },
+    url: {
+        type: String
+       
+    }},
+
 
     
     created_at: {

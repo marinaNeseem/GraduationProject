@@ -8,10 +8,10 @@ const ItemSchema = new mongoose.Schema({
         minlength:[3,'too short title name at least 3 charachter '],
         maxlength:[20,'Too long titlename'],
     },
-Descreption:{
+Description:{
     type: String,
-    minlength:[3,'too short Descreption '],
-    maxlength:[200,'Too long Descreption'],
+    minlength:[3,'too short Description '],
+    maxlength:[200,'Too long Description'],
 },
 
 price: {
@@ -39,34 +39,35 @@ slug:{
     type:String,
     lowercase: true,
 },
-  image: String,
-      
+image: {
+    public_id: {
+        type: String,
+        required: true
+    },
+    url: {
+        type: String,
+        required: true
+    }
+
+},
 
 status: { 
     type: String,
      enum: ['pending', 'accepted', 'rejected'],
      default: 'pending' },
 
-
+     
      created_at: {
         type: Date,
         default: Date.now
     },
     updated_at: {
         type: Date,
-        default: Date.nowss
+        default: Date.now
     }
 
-
-
-
 },
-
-{
-});
-
-
-
+);
 //2-create model
  const ItemModel = mongoose.model('Item',ItemSchema);
   module.exports = ItemModel;

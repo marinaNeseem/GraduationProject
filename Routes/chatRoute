@@ -1,7 +1,8 @@
 const express = require('express');
-const {AddMessasege  ,getAllMessage,getAllChats} =require('../Controllers/ChatController');
+const {AddMessasege  ,getAllMessage,getAllChats,sendPhotoMessage} =require('../Controllers/ChatController');
 const router=express.Router();
 router.route('/Sendmess').post(AddMessasege); 
+router.route('/Sendphoto').post(sendPhotoMessage); 
 router.route('/getmess/:from/:to').get(getAllMessage);
 router.route('/getchats').get(getAllChats);
 module.exports=router;

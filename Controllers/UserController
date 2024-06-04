@@ -7,6 +7,7 @@ const multer = require('multer');
 const bcrypt = require('bcrypt');
 const User = require('../modules/UserModel');
 const mongoose = require('mongoose');
+const cloudinary = require('../util/Cloudinary.js');
 
 //register
 
@@ -69,72 +70,65 @@ exports.loginUser = async (req, res) => {
 
 //upload user photo after registration
 //Upload User Photo
-const storagee = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'uploadsUsers/'); // Save the uploaded files to the 'uploads' directory
-    },
-    filename: function (req, file, cb) {
-        cb(null, file.fieldname + '-' + Date.now() + '.' + file.originalname.split('.').pop());
+// Middleware to handle file upload
+
+// Configure multer for file upload
+// Configure multer for file upload
+const storage = multer.memoryStorage(); // Use memory storage for simplicity
+const upload = multer({ storage: storage });
+
+// Middleware to handle file upload
+const uploadMiddleware = upload.single('image');
+
+exports.UploadUserPhoto = [uploadMiddleware, asyncHandler(async (req, res) => {
+  const token = req.headers.token;
+
+  // Check if token exists
+  if (!token) {
+    return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
+  }
+
+  try {
+    // Verify token
+    const decoded = jwt.verify(token, 'your_secret_key');
+    const userId = decoded.userId;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, msg:` No user found for this id ${userId} `});
     }
-  });
-  const uploadsUsers = multer({ storage: storagee });
-  
-  exports.UploadUserPhoto = asyncHandler(async (req, res) => {
-    uploadsUsers.single('image')(req, res, async (err) => {
-      if (err) {
-        console.log(err);
-        return res.status(400).json({ success: false, message: "Error uploading image" });
-      }
-  
-      // Extract token from request headers
-      const token = req.headers.token;
-  
-      // Check if token exists
-      if (!token) {
-        return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
-      }
-  
-      try {
-        // Verify token
-        const decoded = jwt.verify(token, 'your_secret_key');
-        const userId = decoded.userId;
-  
-        const user = await User.findById(userId);
-        if (!user) {
-          return res.status(404).json({ success: false, msg: `No user found for this id ${userId}` });
-        }else{
-  
-        // Update user's photo
-        const imageUrl = req.file ?` ${req.protocol}://${req.get('host')}/${req.file.path}` : null;
-        user.image=imageUrl;
-        await user.save();
 
- // Reformat the response data
- const responseData = {
-   
-    username: user.username,
-    email: user.email,
-    phone: user.phone,
-    image: user.image, // Include the updated image
-    role: user.role,
-   
-};
-
-
-
-  
-        res.status(200).json({ success: true, responseData });
+    // Check if file is uploaded
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Image file is required' });
     }
-      } catch (error) {
-        console.log(error);
-        res.status(500).json({ success: false, message: 'Internal Server Error' });
-      }
+
+    // Upload image to Cloudinary
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream({ folder: "customers" }, (error, result) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(result);
+        }
+      });
+
+      stream.end(req.file.buffer);
     });
-  });
-  
 
-  
+    // Update user's photo
+    user.image = {
+      public_id: result.public_id,
+      url: result.secure_url
+    };
+    await user.save();
 
+    res.status(200).json({ success: true, data: user });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
+})];
 
   //update user information ONLY
 // Update user information (excluding password)
@@ -218,53 +212,62 @@ exports.changePassword = asyncHandler(async (req, res) => {
     }
 });
 
-//UPDATE USER PHOTO
-const str = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'uploadsUsers/'); // Save the uploaded files to the 'uploads' directory
-    },
-    filename: function (req, file, cb) {
-        cb(null, file.fieldname + '-' + Date.now() + '.' + file.originalname.split('.').pop());
+/*
+// Update user photo function
+exports.UpdateUserPhoto = [uploadMiddlewareUpdate, asyncHandler(async (req, res) => {
+    const token = req.headers.token;
+  
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
     }
-});
-const updateUsers = multer({ storage: str });
+  
+    try {
+      const decoded = jwt.verify(token, 'your_secret_key');
+      const userId = decoded.userId;
+  
+      const user = await User.findById(userId);
+      if (!user) {
+        console.log(`No user found for this id ${userId}`);
+        return res.status(404).json({ success: false, msg: `No user found for this id ${userId}` });
+      }
+  
+      if (!req.file) {
+        console.log('No image file uploaded');
+        return res.status(400).json({ success: false, message: 'Image file is required' });
+      }
+  
+      console.log('Uploading image to Cloudinary...');
+      const result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream({ folder: "customers" }, (error, result) => {
+          if (error) {
+            console.log('Error uploading image to Cloudinary:', error);
+            reject(error);
+          } else {
+            console.log('Image uploaded to Cloudinary:', result);
+            resolve(result);
+          }
+        });
+  
+        stream.end(req.file.buffer);
+      });
+  
+      console.log('Updating user photo in the database...');
+      user.image = {
+        public_id: result.public_id,
+        url: result.secure_url
+      };
+      await user.save();
+      console.log('User photo updated successfully');
+  
+      res.status(200).json({ success: true, data: user });
+    } catch (error) {
+      console.log('Internal Server Error:', error);
+      res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+  })];
+  */
 
-exports.UpdateUserPhoto = asyncHandler(async (req, res) => {
-    updateUsers .single('image')(req, res, async (err) => {
-        if (err) {
-            console.log(err);
-            return res.status(400).json({ success: false, message: "Error uploading image" });
-        }
 
-        // Extract token from request headers
-        const token = req.headers.token;
-
-        // Check if token exists
-        if (!token) {
-            return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
-        }
-
-        try {
-            // Verify token
-            const decoded = jwt.verify(token, 'your_secret_key');
-            const userId = decoded.userId;
-
-            const user = await User.findById(userId);
-            if (!user) {
-                return res.status(404).json({ success: false, msg: `No user found for this id ${userId}` });
-            }
-
-            // Update user's photo
-            user.image = req.file ? req.file.path : user.image; // If req.file is provided, update the image path; otherwise, keep the existing image path
-            await user.save();
-
-            res.status(200).json({ success: true, data: user });
-        } catch (error) {
-            console.log(error);
-            res.status(500).json({ success: false, message: 'Internal Server Error' });
-        }
-    });
-});
 
 
 //// List user information based on token

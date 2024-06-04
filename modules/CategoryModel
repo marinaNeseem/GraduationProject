@@ -12,9 +12,16 @@ const CategorySchema = new mongoose.Schema({
         type: String,
         lowercase: true,
     },
-    image:{
-        type:String,
-        required: [true,'Image Is Required'],
+    image: {
+        public_id: {
+            type: String,
+            required: true
+        },
+        url: {
+            type: String,
+            required: true
+        }
+    
     },
     user: {// to know wich admin create that category
         type: mongoose.Schema.Types.ObjectId,

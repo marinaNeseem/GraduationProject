@@ -565,6 +565,8 @@ exports.getacceptedItems = asyncHandler(async (req, res) => {
   }
 });
 
+
+
 // Get today's transactions data
 exports.getTodayTransactionsData = asyncHandler(async (req, res) => {
   try {
@@ -590,7 +592,7 @@ exports.getTodayTransactionsData = asyncHandler(async (req, res) => {
       : ((todayTransactions - yesterdayTransactions) / yesterdayTransactions) * 100;
 
     // Format percentage change with % sign
-    const formattedPercentageChange = `${percentageChange.toFixed(0)}%`;
+    const formattedPercentageChange = `${percentageChange.toFixed(2)}% `;
 
     // Get transaction data aggregated by 8-hour intervals for today
     const hourlyTransactions = await ExchangeRequestModel.aggregate([
