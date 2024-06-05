@@ -20,7 +20,7 @@ exports.listOfferedItems = asyncHandler(async (req, res) => {
         }
 
         // Fetch items of the user by their ID
-        const itemsList = await ItemModel.find({ user: userId });
+        const itemsList = await ItemModel.find({ user: userId , status: 'accepted'})
 
         res.status(200).json(itemsList);
     } catch (error) {
@@ -125,8 +125,7 @@ async function deleteExchangeRequest(req, res) {
 }
 
 */
-
-//respondToExchangeRequest
+///Function to Update request Status based on the user of the requested item respose 
 
 exports.respondToExchangeRequest = asyncHandler(async (req, res) => {
     try {

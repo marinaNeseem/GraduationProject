@@ -981,8 +981,7 @@ exports.getItems = asyncHandler(async (req, res) => {
     });
 });
 
-
-// Combined function to list all users and search users by name(CUSTOMERS PAGE)
+// Combined function to list all users and search users by name
 exports.getAllUsers = asyncHandler(async (req, res) => {
     // Extract token from request headers
     const token = req.headers.token;
@@ -1004,11 +1003,11 @@ exports.getAllUsers = asyncHandler(async (req, res) => {
 
         // Pagination parameters
         const page = req.query.page * 1 || 1;
-        const limit = req.query.limit * 1 || 10;
+        const limit = req.query.limit * 1||  10;
         const skip = (page - 1) * limit;
 
         // Create query object for search
-        let query = {};
+        let query = { role: { $ne: 'admin' } }; // Exclude admins
 
         // Check if there's a search query
         if (req.query.search) {
@@ -1039,9 +1038,7 @@ exports.getAllUsers = asyncHandler(async (req, res) => {
     }
 });
 
-
-
-// Combined function to list all Categories and search Categories by name
+// Combined function to list all Categories and search it by name
 exports.listCategoriesWithItemsCount = asyncHandler(async (req, res) => {
     try {
         // Pagination parameters
@@ -1084,6 +1081,7 @@ exports.listCategoriesWithItemsCount = asyncHandler(async (req, res) => {
             result.push({
                 id: category._id,
                 name: category.name,
+                image: category.image, // Include the image of the category
                 itemCount: itemCount,
                 createdAt: createdAt
             });

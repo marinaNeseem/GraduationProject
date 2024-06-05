@@ -185,8 +185,6 @@ exports.getAllMessage = async (req, res) => {
 
 
 
-
-
 exports.getAllChats = async (req, res) => {
   try {
     // Extract token from request headers
@@ -210,17 +208,34 @@ exports.getAllChats = async (req, res) => {
     // Extract necessary information from each chat room
     const chats = chatRooms.map((room) => {
       const otherUsers = room.users.filter(user => user._id.toString() !== userId); // Exclude the current user from the list of users in the chat
+      
+      // Get the last message in the chat, if any
+      let lastMessage = null;
+      if (room.messages.length > 0) {
+        const lastMsg = room.messages[room.messages.length - 1];
+        lastMessage = {
+          text: lastMsg.text || null,
+          photo: lastMsg.photo && lastMsg.photo.url ? {
+            url: lastMsg.photo.url,
+            public_id: lastMsg.photo.public_id
+          } : null,
+          sender: lastMsg.sender,
+          date: lastMsg.date,
+          time: lastMsg.time
+        };
+      }
+
       return {
         chatId: room._id,
         users: otherUsers.map(user => ({ userId: user._id, username: user.username })), // Extract user IDs and usernames
-        lastMessage: room.messages.length > 0 ? room.messages[room.messages.length - 1] : null // Get the last message in the chat, if any
+        lastMessage: lastMessage
       };
     });
 
     // Sort the chats by the most recent activity (last message time or updatedAt)
     const sortedChats = chats.sort((a, b) => {
-      const aTime = a.lastMessage ? new Date(a.lastMessage.Date) : new Date(a.updatedAt);
-      const bTime = b.lastMessage ? new Date(b.lastMessage.Date) : new Date(b.updatedAt);
+      const aTime = a.lastMessage ? new Date(a.lastMessage.date) : new Date(a.updatedAt);
+      const bTime = b.lastMessage ? new Date(b.lastMessage.date) : new Date(b.updatedAt);
       return bTime - aTime;
     });
 
@@ -230,4 +245,3 @@ exports.getAllChats = async (req, res) => {
     res.status(500).json({ success: false, message: 'Internal Server Error' });
   }
 };
-
